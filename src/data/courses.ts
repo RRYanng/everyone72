@@ -581,30 +581,76 @@ const RAW: RawCourse[] = [
   // Oak Creek — verified scorecard (bluegolf.com). Black tees 72.5/133.
   { id: 'oak-creek-irvine', name: 'Oak Creek Golf Club', city: 'Irvine', state: 'CA', course_rating: 72.5, slope_rating: 133, total_par: 71,
     holes_par: [4,4,3,4,4,5,3,4,4, 5,3,4,4,4,4,4,3,5] },
-  { id: 'tustin-ranch-gc', name: 'Tustin Ranch Golf Club', city: 'Tustin', state: 'CA', course_rating: 73.1, slope_rating: 130, total_par: 72 },
-  { id: 'coyote-hills-gc', name: 'Coyote Hills Golf Course', city: 'Fullerton', state: 'CA', course_rating: 69.8, slope_rating: 119, total_par: 70 },
-  { id: 'anaheim-hills-gc', name: 'Anaheim Hills Golf Course', city: 'Anaheim', state: 'CA', course_rating: 71.5, slope_rating: 129, total_par: 71 },
-  { id: 'dad-miller-gc', name: 'Dad Miller Golf Course', city: 'Anaheim', state: 'CA', course_rating: 69.2, slope_rating: 116, total_par: 71 },
-  { id: 'willowick-gc', name: 'Willowick Golf Course', city: 'Santa Ana', state: 'CA', course_rating: 70.0, slope_rating: 118, total_par: 71 },
-  { id: 'river-view-gc', name: 'River View Golf Course', city: 'Santa Ana', state: 'CA', course_rating: 70.1, slope_rating: 114, total_par: 70 },
-  { id: 'meadowlark-gc', name: 'Meadowlark Golf Course', city: 'Huntington Beach', state: 'CA', course_rating: 70.5, slope_rating: 117, total_par: 72 },
-  { id: 'mile-square-gc', name: 'Mile Square Golf Course', city: 'Fountain Valley', state: 'CA', course_rating: 71.8, slope_rating: 121, total_par: 72 },
-  { id: 'shorecliffs-gc', name: 'Shorecliffs Golf Course', city: 'San Clemente', state: 'CA', course_rating: 70.5, slope_rating: 116, total_par: 72 },
-  { id: 'san-juan-hills-gc', name: 'San Juan Hills Golf Club', city: 'San Juan Capistrano', state: 'CA', course_rating: 71.1, slope_rating: 123, total_par: 71 },
-  { id: 'talega-gc', name: 'Talega Golf Club', city: 'San Clemente', state: 'CA', course_rating: 73.6, slope_rating: 133, total_par: 72 },
-  { id: 'san-clemente-muni', name: 'San Clemente Municipal Golf Course', city: 'San Clemente', state: 'CA', course_rating: 69.8, slope_rating: 118, total_par: 72 },
-  { id: 'black-gold-gc', name: 'Black Gold Golf Club', city: 'Yorba Linda', state: 'CA', course_rating: 74.0, slope_rating: 136, total_par: 72 },
-  { id: 'los-coyotes-cc-oc', name: 'Los Coyotes Country Club', city: 'Buena Park', state: 'CA', course_rating: 72.5, slope_rating: 128, total_par: 72 },
-  { id: 'fullerton-gc', name: 'Fullerton Golf Course', city: 'Fullerton', state: 'CA', course_rating: 72.3, slope_rating: 124, total_par: 72 },
-  { id: 'newport-beach-gc', name: 'Newport Beach Golf Course', city: 'Newport Beach', state: 'CA', course_rating: 68.9, slope_rating: 113, total_par: 70 },
-  { id: 'marbella-cc-oc', name: 'Marbella Country Club', city: 'San Juan Capistrano', state: 'CA', course_rating: 73.0, slope_rating: 131, total_par: 72 },
-  { id: 'coto-de-caza-south', name: 'Coto de Caza Golf Club (South Course)', city: 'Coto de Caza', state: 'CA', course_rating: 73.2, slope_rating: 130, total_par: 72 },
-  { id: 'coto-de-caza-north', name: 'Coto de Caza Golf Club (North Course)', city: 'Coto de Caza', state: 'CA', course_rating: 72.5, slope_rating: 126, total_par: 72 },
-  { id: 'dove-canyon-cc', name: 'Dove Canyon Country Club', city: 'Trabuco Canyon', state: 'CA', course_rating: 73.8, slope_rating: 135, total_par: 72 },
-  { id: 'tijeras-creek-gc', name: 'Tijeras Creek Golf Club', city: 'Rancho Santa Margarita', state: 'CA', course_rating: 72.5, slope_rating: 127, total_par: 72 },
-  { id: 'arroyo-trabuco-gc', name: 'Arroyo Trabuco Golf Club', city: 'Mission Viejo', state: 'CA', course_rating: 72.1, slope_rating: 124, total_par: 72 },
-  { id: 'aliso-viejo-cc', name: 'Aliso Viejo Country Club', city: 'Aliso Viejo', state: 'CA', course_rating: 70.8, slope_rating: 122, total_par: 71 },
-  { id: 'yorba-linda-cc', name: 'Yorba Linda Country Club', city: 'Yorba Linda', state: 'CA', course_rating: 73.0, slope_rating: 130, total_par: 72 },
+  // Tustin Ranch — verified bluegolf.com
+  { id: 'tustin-ranch-gc', name: 'Tustin Ranch Golf Club', city: 'Tustin', state: 'CA', course_rating: 73.6, slope_rating: 134, total_par: 72,
+    holes_par: [4,5,3,4,4,3,4,4,5, 5,3,4,4,4,5,4,3,4] },
+  // Coyote Hills — verified bluegolf.com (par 70)
+  { id: 'coyote-hills-gc', name: 'Coyote Hills Golf Course', city: 'Fullerton', state: 'CA', course_rating: 72.1, slope_rating: 134, total_par: 70,
+    holes_par: [4,4,3,4,4,4,4,3,4, 4,5,4,4,3,5,4,3,4] },
+  // Anaheim Hills — verified bluegolf.com
+  { id: 'anaheim-hills-gc', name: 'Anaheim Hills Golf Course', city: 'Anaheim', state: 'CA', course_rating: 71.4, slope_rating: 124, total_par: 71,
+    holes_par: [5,4,4,4,3,4,3,4,4, 4,4,5,3,4,4,4,3,5] },
+  // Dad Miller — verified bluegolf.com (currently par 69; hole 15 permanently changed from par 5 to par 3)
+  { id: 'dad-miller-gc', name: 'Dad Miller Golf Course', city: 'Anaheim', state: 'CA', course_rating: 66.6, slope_rating: 110, total_par: 69,
+    holes_par: [4,4,4,4,4,4,3,5,3, 5,3,4,3,4,3,3,4,5] },
+  // Willowick — verified bluegolf.com
+  { id: 'willowick-gc', name: 'Willowick Golf Course', city: 'Santa Ana', state: 'CA', course_rating: 68.4, slope_rating: 113, total_par: 71,
+    holes_par: [4,3,5,3,4,5,3,4,4, 5,5,3,4,4,4,4,3,4] },
+  // River View — verified bluegolf.com
+  { id: 'river-view-gc', name: 'River View Golf Course', city: 'Santa Ana', state: 'CA', course_rating: 68.4, slope_rating: 120, total_par: 70,
+    holes_par: [4,3,3,4,5,3,4,5,3, 3,4,4,5,3,5,4,5,3] },
+  // Meadowlark — verified bluegolf.com
+  { id: 'meadowlark-gc', name: 'Meadowlark Golf Course', city: 'Huntington Beach', state: 'CA', course_rating: 68.1, slope_rating: 119, total_par: 71,
+    holes_par: [4,4,5,3,4,5,3,4,4, 4,4,4,3,4,4,3,4,5] },
+  // Mile Square (Classic Course) — verified bluegolf.com
+  { id: 'mile-square-gc', name: 'Mile Square Golf Course (Classic)', city: 'Fountain Valley', state: 'CA', course_rating: 71.5, slope_rating: 124, total_par: 72,
+    holes_par: [4,4,4,5,3,4,4,3,5, 5,4,4,3,4,3,4,4,5] },
+  // Shorecliffs — verified bluegolf.com (par 70)
+  { id: 'shorecliffs-gc', name: 'Shorecliffs Golf Course', city: 'San Clemente', state: 'CA', course_rating: 69.0, slope_rating: 125, total_par: 70,
+    holes_par: [4,5,5,3,4,3,5,4,4, 3,4,4,4,3,4,3,4,4] },
+  // San Juan Hills — verified bluegolf.com
+  { id: 'san-juan-hills-gc', name: 'San Juan Hills Golf Club', city: 'San Juan Capistrano', state: 'CA', course_rating: 70.6, slope_rating: 125, total_par: 71,
+    holes_par: [4,4,4,4,4,5,3,5,3, 4,4,5,4,3,4,3,5,3] },
+  // Talega — verified bluegolf.com
+  { id: 'talega-gc', name: 'Talega Golf Club', city: 'San Clemente', state: 'CA', course_rating: 73.7, slope_rating: 135, total_par: 72,
+    holes_par: [4,5,4,4,3,5,3,3,4, 4,5,3,5,4,5,4,3,4] },
+  // San Clemente Municipal — verified bluegolf.com
+  { id: 'san-clemente-muni', name: 'San Clemente Municipal Golf Course', city: 'San Clemente', state: 'CA', course_rating: 70.9, slope_rating: 126, total_par: 72,
+    holes_par: [4,3,4,4,5,4,5,4,3, 4,5,5,3,4,3,4,4,4] },
+  // Black Gold — verified bluegolf.com
+  { id: 'black-gold-gc', name: 'Black Gold Golf Club', city: 'Yorba Linda', state: 'CA', course_rating: 73.2, slope_rating: 136, total_par: 72,
+    holes_par: [4,4,4,5,4,5,3,3,4, 3,4,4,5,4,4,3,4,5] },
+  // Los Coyotes CC (Lake/Valley 18-hole combo) — verified bluegolf.com
+  { id: 'los-coyotes-cc-oc', name: 'Los Coyotes Country Club', city: 'Buena Park', state: 'CA', course_rating: 72.3, slope_rating: 131, total_par: 71,
+    holes_par: [4,4,3,5,3,4,3,4,5, 5,3,5,4,3,4,4,4,4] },
+  // Fullerton GC — verified bluegolf.com (par 67 executive course)
+  { id: 'fullerton-gc', name: 'Fullerton Golf Course', city: 'Fullerton', state: 'CA', course_rating: 65.4, slope_rating: 114, total_par: 67,
+    holes_par: [4,5,4,4,3,3,3,3,4, 4,3,5,4,4,3,4,4,3] },
+  // Newport Beach GC — REMOVED: par-59 executive short course (13 par-3s), not a regulation layout
+  // Marbella CC — verified bluegolf.com (par 70)
+  { id: 'marbella-cc-oc', name: 'Marbella Country Club', city: 'San Juan Capistrano', state: 'CA', course_rating: 72.4, slope_rating: 134, total_par: 70,
+    holes_par: [4,4,4,3,5,4,3,4,4, 4,3,4,4,5,4,3,4,4] },
+  // Coto de Caza South — verified bluegolf.com
+  { id: 'coto-de-caza-south', name: 'Coto de Caza Golf Club (South Course)', city: 'Coto de Caza', state: 'CA', course_rating: 73.8, slope_rating: 137, total_par: 72,
+    holes_par: [4,4,5,3,4,5,4,3,4, 3,4,5,4,4,4,3,4,5] },
+  // Coto de Caza North — verified bluegolf.com
+  { id: 'coto-de-caza-north', name: 'Coto de Caza Golf Club (North Course)', city: 'Coto de Caza', state: 'CA', course_rating: 75.6, slope_rating: 143, total_par: 72,
+    holes_par: [5,4,4,3,5,3,4,4,4, 5,3,5,4,4,3,4,4,4] },
+  // Dove Canyon — verified bluegolf.com (par 71)
+  { id: 'dove-canyon-cc', name: 'Dove Canyon Country Club', city: 'Trabuco Canyon', state: 'CA', course_rating: 74.7, slope_rating: 140, total_par: 71,
+    holes_par: [5,4,4,3,4,4,3,4,5, 3,5,4,3,5,4,4,3,4] },
+  // Tijeras Creek — verified bluegolf.com
+  { id: 'tijeras-creek-gc', name: 'Tijeras Creek Golf Club', city: 'Rancho Santa Margarita', state: 'CA', course_rating: 73.7, slope_rating: 137, total_par: 72,
+    holes_par: [5,4,4,4,3,4,3,5,4, 4,5,4,5,3,4,3,4,4] },
+  // Arroyo Trabuco — verified bluegolf.com
+  { id: 'arroyo-trabuco-gc', name: 'Arroyo Trabuco Golf Club', city: 'Mission Viejo', state: 'CA', course_rating: 73.8, slope_rating: 135, total_par: 72,
+    holes_par: [4,4,5,3,4,4,5,3,4, 4,3,4,3,5,4,4,4,5] },
+  // Aliso Viejo CC — verified bluegolf.com (par 72, not 71)
+  { id: 'aliso-viejo-cc', name: 'Aliso Viejo Country Club', city: 'Aliso Viejo', state: 'CA', course_rating: 71.5, slope_rating: 129, total_par: 72,
+    holes_par: [4,4,4,4,3,4,3,4,5, 4,4,3,4,5,5,3,4,5] },
+  // Yorba Linda CC — verified bluegolf.com (par 71)
+  { id: 'yorba-linda-cc', name: 'Yorba Linda Country Club', city: 'Yorba Linda', state: 'CA', course_rating: 73.4, slope_rating: 132, total_par: 71,
+    holes_par: [4,4,4,4,3,4,3,4,5, 4,4,4,3,5,4,4,3,5] },
 
   // Los Angeles County
   { id: 'griffith-park-wilson', name: 'Griffith Park Golf Course (Wilson)', city: 'Los Angeles', state: 'CA', course_rating: 72.1, slope_rating: 122, total_par: 72 },
