@@ -1,37 +1,65 @@
 // ============================================================
-// 登录界面
+// 登录界面 — 使用内联错误提示（Alert.alert 在 Web 端不可靠）
 // ============================================================
 
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation';
 import { supabase } from '../../lib/supabase';
-import { Linking } from 'react-native';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 };
 
-
 export default function LoginScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter your email and password.');
+    setError(null);
+
+    if (!email.trim()) {
+      setError('Please enter your email.');
       return;
     }
+    if (!password) {
+      setError('Please enter your password.');
+      return;
+    }
+
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) Alert.alert('Login Failed', error.message);
-    // 成功后 useAuth 会自动更新 session，导航会自动切换到主界面
+
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (signInError) {
+        const msg = signInError.message;
+        if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
+          setError('Incorrect email or password. Please try again.');
+        } else if (msg.includes('Email not confirmed')) {
+          setError('Please check your email and click the confirmation link first.');
+        } else {
+          setError(msg);
+        }
+        setLoading(false);
+        return;
+      }
+      // 登录成功 → onAuthStateChange 自动切换到主界面，无需手动导航
+
+    } catch (err: any) {
+      console.error('[Login] unexpected error:', err);
+      setError('Something went wrong. Please check your connection and try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -46,14 +74,21 @@ export default function LoginScreen({ navigation }: Props) {
         <Text style={styles.tagline}>Play better. Track smarter.</Text>
       </View>
 
-      {/* 表单区域 */}
+      {/* 错误提示 */}
+      {error ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>⚠️  {error}</Text>
+        </View>
+      ) : null}
+
+      {/* 表单 */}
       <View style={styles.form}>
         <TextInput
           style={styles.input}
           placeholder="Email"
           placeholderTextColor="#aaa"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(t) => { setEmail(t); setError(null); }}
           autoCapitalize="none"
           keyboardType="email-address"
         />
@@ -62,7 +97,7 @@ export default function LoginScreen({ navigation }: Props) {
           placeholder="Password"
           placeholderTextColor="#aaa"
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(t) => { setPassword(t); setError(null); }}
           secureTextEntry
         />
 
@@ -79,10 +114,13 @@ export default function LoginScreen({ navigation }: Props) {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-          <Text style={styles.link}>Don't have an account? <Text style={styles.linkBold}>Sign Up</Text></Text>
+          <Text style={styles.link}>
+            Don't have an account?{' '}
+            <Text style={styles.linkBold}>Sign Up</Text>
+          </Text>
         </TouchableOpacity>
 
-        {/* Legal links — required by App Store */}
+        {/* Legal links */}
         <View style={styles.legalRow}>
           <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy')}>
             <Text style={styles.legalLink}>Privacy Policy</Text>
@@ -106,7 +144,7 @@ const styles = StyleSheet.create({
   },
   logoArea: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 32,
   },
   logoEmoji: {
     fontSize: 64,
@@ -122,6 +160,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#a8d5b5',
     marginTop: 4,
+  },
+  errorBox: {
+    backgroundColor: 'rgba(220, 53, 69, 0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(220, 53, 69, 0.6)',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#ffb3ba',
+    fontSize: 14,
+    lineHeight: 20,
   },
   form: {
     gap: 12,
