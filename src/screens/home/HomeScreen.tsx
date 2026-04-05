@@ -26,7 +26,8 @@ export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const [recentRounds, setRecentRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
-  const [username, setUsername] = useState('');
+  const [username, setUsername]   = useState('');
+  const [avatarEmoji, setAvatar]  = useState('🏌️');
   const [activePlan, setActivePlan] = useState<PracticePlan | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
 
@@ -42,10 +43,13 @@ export default function HomeScreen() {
   const fetchProfile = async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('username')
+      .select('username, avatar_url')
       .eq('id', user!.id)
-      .maybeSingle();               // 用 maybeSingle 避免没有 profile 时返回 406
-    if (data) setUsername(data.username);
+      .maybeSingle();
+    if (data) {
+      setUsername(data.username ?? '');
+      setAvatar(data.avatar_url ?? '🏌️');
+    }
   };
 
   const fetchRecentRounds = async () => {
@@ -114,12 +118,14 @@ export default function HomeScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* 顶部栏 */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Good round, {username || 'Golfer'} 👋</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>
+              {username ? `${username} ` : ''}{(avatarEmoji && avatarEmoji !== '🏌️') ? avatarEmoji : '👋'}
+            </Text>
             <Text style={styles.date}>{new Date().toDateString()}</Text>
           </View>
-          <TouchableOpacity onPress={signOut} style={styles.signOutBtn}>
-            <Ionicons name="log-out-outline" size={22} color="#fff" />
+          <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.signOutBtn}>
+            <Ionicons name="settings-outline" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
 

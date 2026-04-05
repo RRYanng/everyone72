@@ -1,17 +1,19 @@
 // ============================================================
-// 导航结构 — Phase 2 更新
+// 导航结构 — Phase 4 更新
 //
 // 底部 4 个 Tab：
 //   Home     — 首页（成绩摘要 + 开始新一轮）
-//   Practice — 练球动态 Feed（原 Play 按钮）
-//   Social   — 好友 + 排行榜（新增）
+//   Practice — 练球动态 Feed
+//   Crew     — 球友小组（替代 Social Tab）
 //   History  — 历史成绩
 //
 // Root Stack 额外页面：
-//   CourseSearch → Scorecard → Analysis（从 Home 进入）
-//   PracticeCheckIn（从 Practice Feed FAB 进入）
-//   Leaderboard（从 Practice Feed 或 Social 进入）
-//   Friends（从 Social Tab 进入）
+//   CourseSearch → Scorecard → Analysis
+//   PracticeCheckIn
+//   Leaderboard / Friends（从 Crew 内进入）
+//   CrewDetail / CreateCrew
+//   Settings
+//   PrivacyPolicy / Terms
 // ============================================================
 
 import React from 'react';
@@ -40,6 +42,12 @@ import PracticeCheckInScreen from '../screens/practice/PracticeCheckInScreen';
 import LeaderboardScreen from '../screens/social/LeaderboardScreen';
 import FriendsScreen from '../screens/social/FriendsScreen';
 
+// Phase 4 — Crew + Settings
+import CrewListScreen from '../screens/crew/CrewListScreen';
+import CrewDetailScreen from '../screens/crew/CrewDetailScreen';
+import CreateCrewScreen from '../screens/crew/CreateCrewScreen';
+import SettingsScreen from '../screens/settings/SettingsScreen';
+
 // Legal
 import PrivacyPolicyScreen from '../screens/legal/PrivacyPolicyScreen';
 import TermsScreen from '../screens/legal/TermsScreen';
@@ -66,6 +74,10 @@ export type RootStackParamList = {
   PracticeCheckIn: undefined;
   Leaderboard: undefined;
   Friends: undefined;
+  // Phase 4
+  CrewDetail: { crewId: string };
+  CreateCrew: undefined;
+  Settings: undefined;
   // Legal
   PrivacyPolicy: undefined;
   Terms: undefined;
@@ -74,11 +86,6 @@ export type RootStackParamList = {
 const AuthStack  = createNativeStackNavigator<AuthStackParamList>();
 const RootStack  = createNativeStackNavigator<RootStackParamList>();
 const Tab        = createBottomTabNavigator();
-
-// Social Tab 占位屏（直接显示好友页，顶部加排行榜入口）
-function SocialTabScreen() {
-  return <FriendsScreen />;
-}
 
 // ── 底部 Tab ──────────────────────────────────────────────────
 function MainTabs() {
@@ -91,10 +98,10 @@ function MainTabs() {
         tabBarStyle: { paddingBottom: 4, height: 56 },
         tabBarIcon: ({ focused, color, size }) => {
           const icons: Record<string, [string, string]> = {
-            Home:     ['home',           'home-outline'],
-            Practice: ['barbell',        'barbell-outline'],
-            Social:   ['people',         'people-outline'],
-            History:  ['time',           'time-outline'],
+            Home:     ['home',     'home-outline'],
+            Practice: ['barbell',  'barbell-outline'],
+            Crew:     ['people',   'people-outline'],
+            History:  ['time',     'time-outline'],
           };
           const [active, inactive] = icons[route.name] ?? ['ellipse', 'ellipse-outline'];
           return <Ionicons name={(focused ? active : inactive) as any} size={size} color={color} />;
@@ -103,7 +110,7 @@ function MainTabs() {
     >
       <Tab.Screen name="Home"     component={HomeScreen}      options={{ title: 'Home' }} />
       <Tab.Screen name="Practice" component={PracticeFeedScreen} options={{ title: 'Practice' }} />
-      <Tab.Screen name="Social"   component={SocialTabScreen} options={{ title: 'Social' }} />
+      <Tab.Screen name="Crew"     component={CrewListScreen}  options={{ title: 'Crew' }} />
       <Tab.Screen name="History"  component={HistoryScreen}   options={{ title: 'History' }} />
     </Tab.Navigator>
   );
@@ -113,18 +120,22 @@ function MainTabs() {
 function AuthenticatedStack() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="MainTabs" component={MainTabs} />
+      <RootStack.Screen name="MainTabs"        component={MainTabs} />
       {/* Phase 1 */}
-      <RootStack.Screen name="CourseSearch"   component={CourseSearchScreen} options={{ presentation: 'modal' }} />
-      <RootStack.Screen name="Scorecard"      component={ScorecardScreen} />
-      <RootStack.Screen name="Analysis"       component={AnalysisScreen} />
+      <RootStack.Screen name="CourseSearch"    component={CourseSearchScreen} options={{ presentation: 'modal' }} />
+      <RootStack.Screen name="Scorecard"       component={ScorecardScreen} />
+      <RootStack.Screen name="Analysis"        component={AnalysisScreen} />
       {/* Phase 2 */}
       <RootStack.Screen name="PracticeCheckIn" component={PracticeCheckInScreen} options={{ presentation: 'modal' }} />
-      <RootStack.Screen name="Leaderboard"    component={LeaderboardScreen} />
-      <RootStack.Screen name="Friends"        component={FriendsScreen} />
+      <RootStack.Screen name="Leaderboard"     component={LeaderboardScreen} />
+      <RootStack.Screen name="Friends"         component={FriendsScreen} />
+      {/* Phase 4 */}
+      <RootStack.Screen name="CrewDetail"      component={CrewDetailScreen} />
+      <RootStack.Screen name="CreateCrew"      component={CreateCrewScreen} options={{ presentation: 'modal' }} />
+      <RootStack.Screen name="Settings"        component={SettingsScreen} options={{ presentation: 'modal' }} />
       {/* Legal */}
-      <RootStack.Screen name="PrivacyPolicy"  component={PrivacyPolicyScreen} />
-      <RootStack.Screen name="Terms"          component={TermsScreen} />
+      <RootStack.Screen name="PrivacyPolicy"   component={PrivacyPolicyScreen} />
+      <RootStack.Screen name="Terms"           component={TermsScreen} />
     </RootStack.Navigator>
   );
 }

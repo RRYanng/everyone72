@@ -268,6 +268,25 @@ export default function HistoryScreen() {
                   <Text style={styles.insightAIText}>{troubleInsight || 'No data yet.'}</Text>
                 )}
               </View>
+
+              {/* Premium upsell — deep analysis */}
+              <View style={styles.premiumLock}>
+                <View style={styles.premiumLockContent}>
+                  <Text style={styles.premiumLockIcon}>🔒</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.premiumLockTitle}>Full Trouble Report</Text>
+                    <Text style={styles.premiumLockSub}>
+                      Hole-by-hole breakdown, Strokes Gained analysis, and a personalized course-management plan.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.premiumLockBtn}>
+                  <Text style={styles.premiumLockBtnText}>🔒 Unlock with Premium</Text>
+                  <View style={styles.comingSoonBadge}>
+                    <Text style={styles.comingSoonBadgeText}>Coming Soon</Text>
+                  </View>
+                </View>
+              </View>
             </>
           )}
         </View>
@@ -463,4 +482,40 @@ const styles = StyleSheet.create({
   },
   insightAITitle: { fontSize: 13, fontWeight: '700', color: '#1a472a', marginBottom: 8 },
   insightAIText: { fontSize: 13, color: '#333', lineHeight: 20 },
+  premiumLock: {
+    margin: 12,
+    marginTop: 4,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#ffd54f',
+    backgroundColor: '#fffde7',
+  },
+  premiumLockContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 14,
+    gap: 12,
+  },
+  premiumLockIcon: { fontSize: 22, marginTop: 2 },
+  premiumLockTitle: { fontSize: 13, fontWeight: '700', color: '#5d4037', marginBottom: 4 },
+  premiumLockSub: { fontSize: 12, color: '#795548', lineHeight: 18 },
+  premiumLockBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff8e1',
+    borderTopWidth: 1,
+    borderTopColor: '#ffe082',
+    paddingVertical: 12,
+    gap: 10,
+  },
+  premiumLockBtnText: { fontSize: 13, fontWeight: '700', color: '#5d4037' },
+  comingSoonBadge: {
+    backgroundColor: '#d4af37',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  comingSoonBadgeText: { fontSize: 10, fontWeight: 'bold', color: '#1a472a' },
 });

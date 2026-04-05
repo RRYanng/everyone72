@@ -117,3 +117,46 @@ export interface TroubleStats {
   totalRounds: number;
   byPar: { par3: number; par4: number; par5: number };
 }
+
+// ── Phase 4 新增 ──────────────────────────────────────────────
+
+/** Crew（球友小组） */
+export interface Crew {
+  id: string;
+  name: string;
+  description: string;
+  emoji: string;
+  creator_id: string;
+  max_members: number;
+  invite_code: string;
+  created_at: string;
+  member_count?: number;  // 从 crew_members 聚合
+}
+
+/** Crew 成员（含关联数据） */
+export interface CrewMember {
+  id: string;
+  crew_id: string;
+  user_id: string;
+  role: 'owner' | 'member';
+  joined_at: string;
+  username?: string;
+  current_streak?: number;
+  total_practices?: number;
+  recent_handicap?: number | null;  // 最近差点（前端计算）
+}
+
+/** Crew 挑战 */
+export interface CrewChallenge {
+  id: string;
+  crew_id: string;
+  created_by: string;
+  title: string;
+  description: string;
+  challenge_type: 'score' | 'practice' | 'handicap';
+  target_value: number | null;
+  deadline: string | null;
+  is_active: boolean;
+  created_at: string;
+  creator_username?: string;
+}
