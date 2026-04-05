@@ -8,10 +8,21 @@ function simpleHash(s: string): number {
   return h >>> 0;
 }
 
-function buildHoles(id: string, totalPar: number): { hole_number: number; par: number }[] {
-  const h = simpleHash(id);
-  const p5 = totalPar <= 67 ? 0 : totalPar - 68;
-  const p3 = totalPar <= 67 ? 5 : 4;
+type RawCourse = {
+  id: string; name: string; city: string; state: string;
+  course_rating: number; slope_rating: number; total_par: number;
+  holes_par?: number[]; // Real verified hole-by-hole pars (18 values). Only set when sourced from official data.
+};
+
+function buildHoles(c: RawCourse): { hole_number: number; par: number }[] {
+  // Use real verified data when available
+  if (c.holes_par && c.holes_par.length === 18) {
+    return c.holes_par.map((par, idx) => ({ hole_number: idx + 1, par }));
+  }
+  // Fallback: algorithmic shuffle for courses without verified hole data
+  const h = simpleHash(c.id);
+  const p5 = c.total_par <= 67 ? 0 : c.total_par - 68;
+  const p3 = c.total_par <= 67 ? 5 : 4;
   const p4 = 18 - p3 - p5;
   const pars: number[] = [...Array(p3).fill(3), ...Array(p4).fill(4), ...Array(p5).fill(5)];
   for (let i = 17; i > 0; i--) {
@@ -21,13 +32,14 @@ function buildHoles(id: string, totalPar: number): { hole_number: number; par: n
   return pars.map((par, idx) => ({ hole_number: idx + 1, par }));
 }
 
-type RawCourse = { id: string; name: string; city: string; state: string;
-  course_rating: number; slope_rating: number; total_par: number };
-
 const RAW: RawCourse[] = [
   { id: 'pebble-beach', name: 'Pebble Beach Golf Links', city: 'Pebble Beach', state: 'CA', course_rating: 75.5, slope_rating: 145, total_par: 72 },
-  { id: 'torrey-pines-south', name: 'Torrey Pines Golf Course (South)', city: 'La Jolla', state: 'CA', course_rating: 76.9, slope_rating: 145, total_par: 72 },
-  { id: 'torrey-pines-north', name: 'Torrey Pines Golf Course (North)', city: 'La Jolla', state: 'CA', course_rating: 72.4, slope_rating: 135, total_par: 72 },
+  // Torrey Pines South — verified scorecard (bluegolf.com)
+  { id: 'torrey-pines-south', name: 'Torrey Pines Golf Course (South)', city: 'La Jolla', state: 'CA', course_rating: 76.9, slope_rating: 145, total_par: 72,
+    holes_par: [4,4,3,4,4,5,4,3,5, 4,3,4,5,4,4,3,4,5] },
+  // Torrey Pines North — verified scorecard (bluegolf.com)
+  { id: 'torrey-pines-north', name: 'Torrey Pines Golf Course (North)', city: 'La Jolla', state: 'CA', course_rating: 72.4, slope_rating: 135, total_par: 72,
+    holes_par: [4,4,3,4,5,4,4,3,5, 5,4,3,4,4,3,4,5,4] },
   { id: 'spyglass-hill', name: 'Spyglass Hill Golf Course', city: 'Pebble Beach', state: 'CA', course_rating: 75.3, slope_rating: 148, total_par: 72 },
   { id: 'poppy-hills', name: 'Poppy Hills Golf Course', city: 'Pebble Beach', state: 'CA', course_rating: 73.5, slope_rating: 135, total_par: 72 },
   { id: 'tpc-harding-park', name: 'TPC Harding Park', city: 'San Francisco', state: 'CA', course_rating: 73.5, slope_rating: 132, total_par: 70 },
@@ -563,8 +575,12 @@ const RAW: RawCourse[] = [
   // ── Southern California Expansion ─────────────────────────────────────────
 
   // Orange County
-  { id: 'strawberry-farms-irvine', name: 'Strawberry Farms Golf Club', city: 'Irvine', state: 'CA', course_rating: 73.9, slope_rating: 135, total_par: 71 },
-  { id: 'oak-creek-irvine', name: 'Oak Creek Golf Club', city: 'Irvine', state: 'CA', course_rating: 72.5, slope_rating: 129, total_par: 71 },
+  // Strawberry Farms — verified scorecard (bluegolf.com + greenskeeper.org). Black tees 73.0/134.
+  { id: 'strawberry-farms-irvine', name: 'Strawberry Farms Golf Club', city: 'Irvine', state: 'CA', course_rating: 73.0, slope_rating: 134, total_par: 71,
+    holes_par: [4,4,3,4,4,5,3,4,5, 4,3,5,4,4,3,5,3,4] },
+  // Oak Creek — verified scorecard (bluegolf.com). Black tees 72.5/133.
+  { id: 'oak-creek-irvine', name: 'Oak Creek Golf Club', city: 'Irvine', state: 'CA', course_rating: 72.5, slope_rating: 133, total_par: 71,
+    holes_par: [4,4,3,4,4,5,3,4,4, 5,3,4,4,4,4,4,3,5] },
   { id: 'tustin-ranch-gc', name: 'Tustin Ranch Golf Club', city: 'Tustin', state: 'CA', course_rating: 73.1, slope_rating: 130, total_par: 72 },
   { id: 'coyote-hills-gc', name: 'Coyote Hills Golf Course', city: 'Fullerton', state: 'CA', course_rating: 69.8, slope_rating: 119, total_par: 70 },
   { id: 'anaheim-hills-gc', name: 'Anaheim Hills Golf Course', city: 'Anaheim', state: 'CA', course_rating: 71.5, slope_rating: 129, total_par: 71 },
@@ -593,7 +609,9 @@ const RAW: RawCourse[] = [
   // Los Angeles County
   { id: 'griffith-park-wilson', name: 'Griffith Park Golf Course (Wilson)', city: 'Los Angeles', state: 'CA', course_rating: 72.1, slope_rating: 122, total_par: 72 },
   { id: 'griffith-park-harding', name: 'Griffith Park Golf Course (Harding)', city: 'Los Angeles', state: 'CA', course_rating: 70.5, slope_rating: 119, total_par: 72 },
-  { id: 'rancho-park-gc', name: 'Rancho Park Golf Course', city: 'Los Angeles', state: 'CA', course_rating: 72.3, slope_rating: 125, total_par: 71 },
+  // Rancho Park — verified scorecard (bluegolf.com). Black tees 72.8/130.
+  { id: 'rancho-park-gc', name: 'Rancho Park Golf Course', city: 'Los Angeles', state: 'CA', course_rating: 72.8, slope_rating: 130, total_par: 71,
+    holes_par: [4,4,3,5,4,4,4,3,4, 4,4,3,4,4,4,3,5,5] },
   { id: 'industry-hills-babe', name: 'Industry Hills Golf Club (Babe Zaharias)', city: 'City of Industry', state: 'CA', course_rating: 73.8, slope_rating: 133, total_par: 72 },
   { id: 'industry-hills-eisenhower', name: 'Industry Hills Golf Club (Eisenhower)', city: 'City of Industry', state: 'CA', course_rating: 72.5, slope_rating: 128, total_par: 72 },
   { id: 'brookside-gc-koiner', name: 'Brookside Golf Course (C.W. Koiner)', city: 'Pasadena', state: 'CA', course_rating: 72.0, slope_rating: 124, total_par: 72 },
@@ -730,7 +748,7 @@ const RAW: RawCourse[] = [
 
 export const SEED_COURSES: Course[] = RAW.map(c => ({
   ...c,
-  holes: buildHoles(c.id, c.total_par),
+  holes: buildHoles(c),
 }));
 
 export function searchCourses(query: string): Course[] {
