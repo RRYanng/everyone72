@@ -41,19 +41,24 @@ export default function RegisterScreen({ navigation }: Props) {
     }
 
     // 2. 在 profiles 表中创建用户资料
-    if (data.user) {
+    // 注意：仅在 session 存在时（邮箱验证已关闭）才能通过 RLS 插入
+    if (data.user && data.session) {
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({ id: data.user.id, username, email });
       if (profileError) console.warn('Profile creation error:', profileError);
+      // session 存在 → 用户已自动登录，App.tsx 的 onAuthStateChange 会自动切换到主界面
+    } else if (data.user && !data.session) {
+      // 邮箱验证仍开启时的回退逻辑
+      setLoading(false);
+      Alert.alert(
+        'Check Your Email',
+        'We sent a confirmation link to ' + email + '. Please verify your email, then sign in.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+      );
     }
 
     setLoading(false);
-    Alert.alert(
-      'Account Created!',
-      'Please check your email to verify your account, then sign in.',
-      [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-    );
   };
 
   return (
