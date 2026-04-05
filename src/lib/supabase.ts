@@ -2,6 +2,10 @@
 // Supabase 클라이언트 초기화
 // 웹: localStorage 사용 (SecureStore는 네이티브 전용)
 // 네이티브(iOS/Android): expo-secure-store 사용
+//
+// EXPO_PUBLIC_* 변수는 Metro 빌드 타임에 번들에 베이크됨.
+// Vercel/CI에서 빌드 시 반드시 환경변수로 설정해야 함.
+// 설정 안된 경우 아래 fallback 값 사용 (anon key는 공개값).
 // ============================================================
 
 import 'react-native-url-polyfill/auto';
@@ -9,39 +13,56 @@ import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-// 웹용 localStorage 어댑터
+// ── Storage adapters ─────────────────────────────────────────────────────────
 const WebStorageAdapter = {
   getItem: (key: string): string | null => {
-    if (typeof localStorage === 'undefined') return null;
-    return localStorage.getItem(key);
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      return localStorage.getItem(key);
+    } catch { return null; }
   },
   setItem: (key: string, value: string): void => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(key, value); } catch {}
   },
   removeItem: (key: string): void => {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
+    try { if (typeof localStorage !== 'undefined') localStorage.removeItem(key); } catch {}
   },
 };
 
-// 네이티브용 SecureStore 어댑터
 const NativeStorageAdapter = {
   getItem: (key: string) => SecureStore.getItemAsync(key),
   setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
-// 플랫폼에 따라 올바른 어댑터 선택
 const storageAdapter = Platform.OS === 'web' ? WebStorageAdapter : NativeStorageAdapter;
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+// ── Config — EXPO_PUBLIC_* 는 빌드 타임에 번들에 삽입됨 ─────────────────────
+// Supabase URL/anon key는 공개값 (클라이언트 번들에 항상 노출됨).
+// 보안은 Supabase RLS(Row Level Security)가 담당.
+const supabaseUrl: string =
+  process.env.EXPO_PUBLIC_SUPABASE_URL ||
+  'https://sgpalmmblxfqgbfamgwc.supabase.co';
 
+const supabaseAnonKey: string =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+  'sb_publishable_Bxs0CgDd06kdDcDJvuNaqw_LAtQI02A';
+
+if (__DEV__) {
+  if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
+    console.warn('[Supabase] EXPO_PUBLIC_SUPABASE_URL not set — using fallback');
+  }
+  if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
+    console.warn('[Supabase] EXPO_PUBLIC_SUPABASE_ANON_KEY not set — using fallback');
+  }
+}
+
+// ── Client ───────────────────────────────────────────────────────────────────
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: storageAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    // 웹에서 URL hash의 access_token을 자동으로 감지
     detectSessionInUrl: Platform.OS === 'web',
   },
 });
