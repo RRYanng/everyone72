@@ -16,6 +16,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { Round } from '../../types';
 import { RootStackParamList } from '../../navigation';
+import { TroubleStats } from '../../types';
+import { generateTroubleInsights } from '../../lib/claude';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -37,6 +39,10 @@ export default function HistoryScreen() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [troubleStats, setTroubleStats] = useState<TroubleStats | null>(null);
+  const [troubleInsight, setTroubleInsight] = useState<string>('');
+  const [loadingInsight, setLoadingInsight] = useState(false);
+  const [insightExpanded, setInsightExpanded] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -52,8 +58,65 @@ export default function HistoryScreen() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     if (data) setRounds(data as Round[]);
+
+    // Trouble Insights：只有 3 轮以上才分析
+    if (data && data.length >= 3) {
+      analyzeTroubles(data.slice(0, 10) as Round[]);
+    }
+
     setLoading(false);
     setRefreshing(false);
+  };
+
+  const analyzeTroubles = async (recentRounds: Round[]) => {
+    if (!user || recentRounds.length < 3) return;
+
+    // 获取这些轮次的 hole_scores
+    const roundIds = recentRounds.map(r => r.id);
+    const { data: holesData } = await supabase
+      .from('hole_scores')
+      .select('troubles, par')
+      .in('round_id', roundIds);
+
+    if (!holesData || holesData.length === 0) return;
+
+    // 聚合 trouble 数据
+    const stats: TroubleStats = {
+      water: 0, ob: 0, bunker: 0, rough: 0, other: 0,
+      totalRounds: recentRounds.length,
+      byPar: { par3: 0, par4: 0, par5: 0 },
+    };
+
+    (holesData as any[]).forEach(hole => {
+      const t: string[] = hole.troubles ?? [];
+      if (t.length === 0) return;
+      t.forEach(tr => {
+        if (tr === 'water')  stats.water++;
+        else if (tr === 'ob') stats.ob++;
+        else if (tr === 'bunker') stats.bunker++;
+        else if (tr === 'rough') stats.rough++;
+        else stats.other++;
+      });
+      // 按 par 分类
+      if (hole.par === 3)      stats.byPar.par3++;
+      else if (hole.par === 4) stats.byPar.par4++;
+      else if (hole.par === 5) stats.byPar.par5++;
+    });
+
+    const totalTrouble = stats.water + stats.ob + stats.bunker + stats.rough + stats.other;
+    if (totalTrouble === 0) return;
+
+    setTroubleStats(stats);
+
+    // 生成 AI 建议
+    setLoadingInsight(true);
+    try {
+      const insight = await generateTroubleInsights(stats);
+      setTroubleInsight(insight);
+    } catch {
+      setTroubleInsight('');
+    }
+    setLoadingInsight(false);
   };
 
   const scoreColor = (vs_par: number) => {
@@ -151,6 +214,65 @@ export default function HistoryScreen() {
           <Text style={styles.chartHint}>Last {chartRounds.length} rounds (oldest → newest)</Text>
         </View>
       )}
+      {/* Trouble Insights 卡片（需要 3 轮以上数据） */}
+      {troubleStats && (
+        <View style={styles.insightCard}>
+          <TouchableOpacity
+            style={styles.insightHeader}
+            onPress={() => setInsightExpanded(e => !e)}
+          >
+            <Text style={styles.insightIcon}>🔍</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.insightTitle}>Trouble Insights</Text>
+              <Text style={styles.insightSub}>
+                Last {troubleStats.totalRounds} rounds · tap to {insightExpanded ? 'collapse' : 'expand'}
+              </Text>
+            </View>
+            <Text style={styles.insightChevron}>{insightExpanded ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+
+          {insightExpanded && (
+            <>
+              {/* Trouble 统计 */}
+              <View style={styles.insightStats}>
+                {[
+                  { emoji: '💧', label: 'Water',  count: troubleStats.water },
+                  { emoji: '🚫', label: 'OB',     count: troubleStats.ob },
+                  { emoji: '🏖️', label: 'Bunker', count: troubleStats.bunker },
+                  { emoji: '🌿', label: 'Rough',  count: troubleStats.rough },
+                ].filter(i => i.count > 0).map(item => (
+                  <View key={item.label} style={styles.insightStatItem}>
+                    <Text style={styles.insightStatEmoji}>{item.emoji}</Text>
+                    <Text style={styles.insightStatCount}>{item.count}×</Text>
+                    <Text style={styles.insightStatLabel}>{item.label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* 按 Par 分析 */}
+              <View style={styles.insightParRow}>
+                <Text style={styles.insightParLabel}>Par 3:</Text>
+                <Text style={styles.insightParVal}>{troubleStats.byPar.par3} incidents</Text>
+                <Text style={styles.insightParLabel}>Par 4:</Text>
+                <Text style={styles.insightParVal}>{troubleStats.byPar.par4} incidents</Text>
+                <Text style={styles.insightParLabel}>Par 5:</Text>
+                <Text style={styles.insightParVal}>{troubleStats.byPar.par5} incidents</Text>
+              </View>
+
+              {/* AI 建议 */}
+              <View style={styles.insightAI}>
+                <Text style={styles.insightAITitle}>🤖 AI Strategy Advice</Text>
+                {loadingInsight ? (
+                  <ActivityIndicator size="small" color="#1a472a" style={{ marginTop: 8 }} />
+                ) : (
+                  <Text style={styles.insightAIText}>{troubleInsight || 'No data yet.'}</Text>
+                )}
+              </View>
+            </>
+          )}
+        </View>
+      )}
+
       {rounds.length > 0 && (
         <Text style={styles.sectionTitle}>All Rounds</Text>
       )}
@@ -290,4 +412,55 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 56, marginBottom: 12 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
   emptySub: { fontSize: 14, color: '#888', marginTop: 8, textAlign: 'center', paddingHorizontal: 32 },
+  insightCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 10,
+  },
+  insightIcon: { fontSize: 20 },
+  insightTitle: { fontSize: 15, fontWeight: '700', color: '#1a472a' },
+  insightSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  insightChevron: { fontSize: 12, color: '#aaa' },
+  insightStats: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  insightStatItem: { alignItems: 'center', gap: 2 },
+  insightStatEmoji: { fontSize: 20 },
+  insightStatCount: { fontSize: 16, fontWeight: 'bold', color: '#f44336' },
+  insightStatLabel: { fontSize: 11, color: '#888' },
+  insightParRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  insightParLabel: { fontSize: 12, color: '#888', fontWeight: '600' },
+  insightParVal: { fontSize: 12, color: '#333', marginRight: 4 },
+  insightAI: {
+    backgroundColor: '#f0f7f2',
+    margin: 12,
+    marginTop: 0,
+    borderRadius: 10,
+    padding: 14,
+  },
+  insightAITitle: { fontSize: 13, fontWeight: '700', color: '#1a472a', marginBottom: 8 },
+  insightAIText: { fontSize: 13, color: '#333', lineHeight: 20 },
 });

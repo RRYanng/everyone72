@@ -4,6 +4,8 @@
 // ============================================================
 
 import React, { useCallback, useState, useRef, useEffect } from 'react';
+import { getUserStats } from '../../lib/streak';
+import { UserStats } from '../../types';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   SafeAreaView, ActivityIndicator, Image, RefreshControl, Animated,
@@ -157,6 +159,7 @@ export default function PracticeFeedScreen() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
 
   // FAB 弹入动画
   const fabScale = useRef(new Animated.Value(0)).current;
@@ -165,7 +168,10 @@ export default function PracticeFeedScreen() {
   }, []);
 
   // 依赖 user：user 变化时（登录后）重新触发；Tab 切换时也会重新拉取
-  useFocusEffect(useCallback(() => { fetchFeed(); }, [user]));
+  useFocusEffect(useCallback(() => {
+    fetchFeed();
+    if (user) fetchUserStats();
+  }, [user]));
 
   const fetchFeed = async () => {
     // user 为 null 时（auth 还在加载）直接结束 loading，不卡转圈
@@ -213,6 +219,12 @@ export default function PracticeFeedScreen() {
     setRefreshing(false);
   };
 
+  const fetchUserStats = async () => {
+    if (!user) return;
+    const stats = await getUserStats(user.id);
+    if (stats) setUserStats(stats);
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -221,6 +233,24 @@ export default function PracticeFeedScreen() {
           <Ionicons name="trophy-outline" size={22} color="#d4af37" />
         </TouchableOpacity>
       </View>
+
+      {/* Streak 横幅 */}
+      {userStats && userStats.current_streak > 0 && (
+        <View style={styles.streakBanner}>
+          <Text style={styles.streakBannerFire}>🔥</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.streakBannerText}>
+              {userStats.current_streak}-day practice streak!
+            </Text>
+            {userStats.badges.length > 0 && (
+              <Text style={styles.streakBannerBadges}>
+                Badges: {userStats.badges.map(b => b.emoji).join(' ')}
+              </Text>
+            )}
+          </View>
+          <Text style={styles.streakBannerTotal}>{userStats.total_practices} total</Text>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.center}>
@@ -316,4 +346,22 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25, shadowRadius: 8, elevation: 8,
   },
+  streakBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff8e6',
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#ffd54f',
+    gap: 10,
+  },
+  streakBannerFire: { fontSize: 24 },
+  streakBannerText: { fontSize: 14, fontWeight: '700', color: '#e65100' },
+  streakBannerBadges: { fontSize: 12, color: '#888', marginTop: 2 },
+  streakBannerTotal: { fontSize: 13, fontWeight: '600', color: '#1a472a' },
 });

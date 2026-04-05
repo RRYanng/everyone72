@@ -18,6 +18,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { showToast } from '../../components/Toast';
+import { updateStreak, BADGE_DEFS } from '../../lib/streak';
+import { Alert as RNAlert } from 'react-native';
 import { RootStackParamList } from '../../navigation';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -47,6 +49,7 @@ export default function PracticeCheckInScreen() {
   const [location, setLocation]           = useState('');
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState('');
+  const [followingPlan, setFollowingPlan] = useState(false);
 
   // ── 选择图片 ────────────────────────────────────────────────
   const pickImage = async () => {
@@ -171,6 +174,7 @@ export default function PracticeCheckInScreen() {
           ball_count:       ballCount ? parseInt(ballCount, 10) : null,
           note:             note.trim() || null,
           location:         location.trim() || null,
+          following_plan:   followingPlan,
         });
 
       if (insertErr) {
@@ -179,9 +183,20 @@ export default function PracticeCheckInScreen() {
       }
 
       console.log('[CheckIn] Insert success, going back to feed');
-      showToast('Practice logged! Your friends can see it now. 🏌️', 'success');
       // 3. 成功 → 返回 Feed
       navigation.goBack();
+      // 更新连续打卡 streak + 勋章
+      try {
+        const { newBadges } = await updateStreak(currentUser.id);
+        if (newBadges.length > 0) {
+          const badge = newBadges[0];
+          showToast(`🎉 New Badge: ${badge.emoji} ${badge.label}!`, 'success');
+        } else {
+          showToast('Practice logged! Your friends can see it now. 🏌️', 'success');
+        }
+      } catch {
+        showToast('Practice logged! Your friends can see it now. 🏌️', 'success');
+      }
 
     } catch (err: any) {
       console.error('[CheckIn] handleSubmit error:', err);
@@ -306,6 +321,25 @@ export default function PracticeCheckInScreen() {
           />
         </View>
 
+        {/* AI 练习计划打卡选项 */}
+        <TouchableOpacity
+          style={[styles.planToggle, followingPlan && styles.planToggleActive]}
+          onPress={() => setFollowingPlan(p => !p)}
+        >
+          <Text style={styles.planToggleEmoji}>🤖</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.planToggleLabel, followingPlan && styles.planToggleLabelActive]}>
+              I'm following my AI practice plan ✅
+            </Text>
+            <Text style={styles.planToggleSub}>
+              Tap to mark this session as part of your AI-recommended plan
+            </Text>
+          </View>
+          <View style={[styles.planToggleCheck, followingPlan && styles.planToggleCheckActive]}>
+            {followingPlan && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
+          </View>
+        </TouchableOpacity>
+
         {/* 错误提示 */}
         {error !== '' && (
           <View style={styles.errorBox}>
@@ -403,4 +437,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a472a', borderRadius: 14, padding: 16, marginTop: 8,
   },
   postBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  planToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  planToggleActive: {
+    borderColor: '#1a472a',
+    backgroundColor: '#f0f7f2',
+  },
+  planToggleEmoji: { fontSize: 22 },
+  planToggleLabel: { fontSize: 14, fontWeight: '600', color: '#555' },
+  planToggleLabelActive: { color: '#1a472a' },
+  planToggleSub: { fontSize: 12, color: '#aaa', marginTop: 2 },
+  planToggleCheck: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: '#ddd',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  planToggleCheckActive: {
+    backgroundColor: '#1a472a', borderColor: '#1a472a',
+  },
 });

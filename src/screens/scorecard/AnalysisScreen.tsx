@@ -12,8 +12,8 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { analyzeRound } from '../../lib/claude';
-import { Round, HoleScore, Course } from '../../types';
+import { analyzeRound, generatePracticePlan } from '../../lib/claude';
+import { Round, HoleScore, Course, PracticePlan } from '../../types';
 import { SEED_COURSES } from '../../data/courses';
 import { RootStackParamList } from '../../navigation';
 
@@ -64,6 +64,9 @@ export default function AnalysisScreen() {
   const [feedback, setFeedback] = useState<string>('');
   const [loadingData, setLoadingData] = useState(true);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [practicePlan, setPracticePlan] = useState<string>('');
+  const [loadingPlan, setLoadingPlan] = useState(false);
+  const [planSaved, setPlanSaved] = useState(false);
 
   // AI 文字渐显动画
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
@@ -132,11 +135,47 @@ export default function AnalysisScreen() {
         .from('rounds')
         .update({ ai_feedback: result })
         .eq('id', r.id);
+
+      // 生成练习计划（不阻塞主分析显示）
+      generateAndSavePlan(r, holes, c, result);
     } catch (err) {
       console.error('AI analysis error:', err);
       setFeedback('Unable to generate AI analysis. Please check your API key and try again.');
     }
     setLoadingAI(false);
+  };
+
+  const generateAndSavePlan = async (r: Round, holes: HoleScore[], c: Course, feedback: string) => {
+    setLoadingPlan(true);
+    try {
+      // 构建历史摘要（简单版）
+      const historySummary = `Latest round feedback: ${feedback.slice(0, 200)}...`;
+      const planText = await generatePracticePlan(r, holes, c, historySummary);
+      setPracticePlan(planText);
+
+      // 存入数据库
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // 先把旧的活跃计划设为 inactive
+        await supabase.from('practice_plans')
+          .update({ is_active: false })
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        // 插入新计划
+        await supabase.from('practice_plans').insert({
+          user_id:    user.id,
+          round_id:   r.id,
+          plan_text:  planText,
+          week_start: new Date().toISOString().split('T')[0],
+          is_active:  true,
+        });
+        setPlanSaved(true);
+      }
+    } catch (err) {
+      console.warn('[PracticePlan] generation error:', err);
+    }
+    setLoadingPlan(false);
   };
 
   const scoreColor = (vs_par: number) => {
@@ -218,6 +257,25 @@ export default function AnalysisScreen() {
             </Animated.View>
           )}
         </View>
+
+        {/* 练习计划卡片 */}
+        {(loadingPlan || practicePlan) && (
+          <View style={styles.planCard}>
+            <View style={styles.planHeader}>
+              <Text style={styles.planIcon}>📅</Text>
+              <Text style={styles.planTitle}>Your Practice Plan</Text>
+              {planSaved && <Text style={styles.planSaved}>✓ Saved</Text>}
+            </View>
+            {loadingPlan && !practicePlan ? (
+              <View style={styles.planLoading}>
+                <ActivityIndicator size="small" color="#d4af37" />
+                <Text style={styles.planLoadingText}>Building your weekly plan...</Text>
+              </View>
+            ) : (
+              <Text style={styles.planText}>{practicePlan}</Text>
+            )}
+          </View>
+        )}
 
         {/* 每洞详细成绩 */}
         <Text style={styles.sectionTitle}>Hole by Hole</Text>
@@ -337,4 +395,39 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 16 },
   tableRowAlt: { backgroundColor: '#f9f9f6' },
   tableCell: { flex: 1, fontSize: 14, color: '#333', textAlign: 'center' },
+  planCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#d4af37',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  planHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 8,
+  },
+  planIcon: { fontSize: 20 },
+  planTitle: { fontSize: 16, fontWeight: 'bold', color: '#1a472a', flex: 1 },
+  planSaved: { fontSize: 12, color: '#4caf50', fontWeight: '600' },
+  planLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  planLoadingText: { color: '#888', fontSize: 14 },
+  planText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 22,
+    fontFamily: undefined,
+  },
 });

@@ -15,6 +15,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCountUp } from '../../hooks/useCountUp';
 import AnimatedPressable from '../../components/AnimatedPressable';
 import { Round } from '../../types';
+import { PracticePlan, UserStats } from '../../types';
+import { getUserStats } from '../../lib/streak';
 import { RootStackParamList } from '../../navigation';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -25,11 +27,15 @@ export default function HomeScreen() {
   const [recentRounds, setRecentRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
+  const [activePlan, setActivePlan] = useState<PracticePlan | null>(null);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchProfile();
       fetchRecentRounds();
+      fetchActivePlan();
+      fetchUserStats();
     }
   }, [user]);
 
@@ -51,6 +57,25 @@ export default function HomeScreen() {
       .limit(20);
     if (data) setRecentRounds(data as Round[]);
     setLoading(false);
+  };
+
+  const fetchActivePlan = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('practice_plans')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) setActivePlan(data as PracticePlan);
+  };
+
+  const fetchUserStats = async () => {
+    if (!user) return;
+    const stats = await getUserStats(user.id);
+    if (stats) setUserStats(stats);
   };
 
   // 计算平均成绩（显示最近 3 轮）
@@ -120,6 +145,23 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Streak 条 */}
+        {userStats && userStats.current_streak > 0 && (
+          <View style={styles.streakBar}>
+            <Text style={styles.streakFire}>🔥</Text>
+            <Text style={styles.streakText}>
+              {userStats.current_streak}-day practice streak!
+            </Text>
+            {userStats.badges.length > 0 && (
+              <View style={styles.streakBadges}>
+                {userStats.badges.slice(-3).map(b => (
+                  <Text key={b.id} style={styles.streakBadgeEmoji}>{b.emoji}</Text>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* 开始新一轮按钮（带缩放动画） */}
         <AnimatedPressable
           style={styles.playBtn}
@@ -130,6 +172,20 @@ export default function HomeScreen() {
             <Text style={styles.playBtnText}>Start New Round</Text>
           </View>
         </AnimatedPressable>
+
+        {/* 活跃 AI 练习计划 */}
+        {activePlan && (
+          <View style={styles.activePlanCard}>
+            <View style={styles.activePlanHeader}>
+              <Text style={styles.activePlanIcon}>📅</Text>
+              <Text style={styles.activePlanTitle}>This Week's Practice Plan</Text>
+              <Text style={styles.activePlanBadge}>AI</Text>
+            </View>
+            <Text style={styles.activePlanPreview} numberOfLines={3}>
+              {activePlan.plan_text}
+            </Text>
+          </View>
+        )}
 
         {/* 最近成绩 */}
         <Text style={styles.sectionTitle}>Recent Rounds</Text>
@@ -255,4 +311,54 @@ const styles = StyleSheet.create({
   roundRight: { alignItems: 'flex-end', marginLeft: 12 },
   roundScore: { fontSize: 28, fontWeight: 'bold' },
   roundPar: { fontSize: 13, color: '#888', marginTop: 2 },
+  streakBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff8e6',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 2,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#ffd54f',
+    gap: 8,
+  },
+  streakFire: { fontSize: 20 },
+  streakText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#e65100' },
+  streakBadges: { flexDirection: 'row', gap: 4 },
+  streakBadgeEmoji: { fontSize: 18 },
+  activePlanCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 14,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#d4af37',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  activePlanHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  activePlanIcon: { fontSize: 16 },
+  activePlanTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: '#1a472a' },
+  activePlanBadge: {
+    backgroundColor: '#1a472a',
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activePlanPreview: { fontSize: 13, color: '#555', lineHeight: 20 },
 });

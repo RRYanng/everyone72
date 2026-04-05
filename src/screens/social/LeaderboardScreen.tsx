@@ -12,12 +12,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 
-type Period = 'week' | 'month' | 'alltime';
+type Period = 'week' | 'month' | 'alltime' | 'streak';
 
 interface LeaderEntry {
   user_id: string;
   username: string;
   count: number;
+  streak?: number;
+  badges?: { id: string; emoji: string; label: string; earned_at: string }[];
   rank: number;
 }
 
@@ -32,6 +34,39 @@ export default function LeaderboardScreen() {
 
   const fetchLeaderboard = async () => {
     setLoading(true);
+
+    // Streak 排行榜
+    if (period === 'streak') {
+      const { data: streakData } = await supabase
+        .from('user_stats')
+        .select('user_id, current_streak, badges')
+        .gt('current_streak', 0)
+        .order('current_streak', { ascending: false })
+        .limit(50);
+
+      if (!streakData) { setLoading(false); return; }
+
+      const uids = streakData.map((r: any) => r.user_id as string);
+      const { data: profilesData2 } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', uids);
+      const profileMap2: Record<string, string> = {};
+      (profilesData2 ?? []).forEach((p: any) => { profileMap2[p.id] = p.username; });
+
+      const streakSorted = streakData.map((r: any, i: number) => ({
+        user_id: r.user_id,
+        username: profileMap2[r.user_id] ?? 'Golfer',
+        count: r.current_streak,
+        streak: r.current_streak,
+        badges: r.badges ?? [],
+        rank: i + 1,
+      }));
+      setEntries(streakSorted);
+      setLoading(false);
+      return;
+    }
+
     const now = new Date();
     let since: string;
 
@@ -104,14 +139,14 @@ export default function LeaderboardScreen() {
 
       {/* 周期选择 */}
       <View style={styles.periodRow}>
-        {(['week', 'month', 'alltime'] as Period[]).map(p => (
+        {(['week', 'month', 'alltime', 'streak'] as Period[]).map(p => (
           <TouchableOpacity
             key={p}
             style={[styles.periodBtn, period === p && styles.periodBtnActive]}
             onPress={() => setPeriod(p)}
           >
             <Text style={[styles.periodText, period === p && styles.periodTextActive]}>
-              {p === 'week' ? 'This Week' : p === 'month' ? 'This Month' : 'All Time'}
+              {p === 'week' ? 'Week' : p === 'month' ? 'Month' : p === 'alltime' ? 'All Time' : '🔥 Streak'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -122,7 +157,9 @@ export default function LeaderboardScreen() {
         <View style={styles.myRankCard}>
           <Text style={styles.myRankLabel}>Your Rank</Text>
           <Text style={styles.myRankNum}>{rankEmoji(myRank.rank)}</Text>
-          <Text style={styles.myRankSessions}>{myRank.count} sessions</Text>
+          <Text style={styles.myRankSessions}>
+            {period === 'streak' ? `${myRank.count} day streak` : `${myRank.count} sessions`}
+          </Text>
         </View>
       )}
 
@@ -149,8 +186,19 @@ export default function LeaderboardScreen() {
                   {item.username}{isMe ? ' (You)' : ''}
                 </Text>
                 <View style={styles.entryCountWrap}>
-                  <Text style={[styles.entryCount, isMe && { color: '#d4af37' }]}>{item.count}</Text>
-                  <Text style={styles.entryCountLabel}>sessions</Text>
+                  <Text style={[styles.entryCount, isMe && { color: '#d4af37' }]}>
+                    {period === 'streak' ? `${item.count}` : item.count}
+                  </Text>
+                  <Text style={styles.entryCountLabel}>
+                    {period === 'streak' ? 'days' : 'sessions'}
+                  </Text>
+                  {period === 'streak' && item.badges && item.badges.length > 0 && (
+                    <View style={{ flexDirection: 'row', marginTop: 2 }}>
+                      {item.badges.slice(-2).map((b: any) => (
+                        <Text key={b.id} style={{ fontSize: 14 }}>{b.emoji}</Text>
+                      ))}
+                    </View>
+                  )}
                 </View>
               </View>
             );

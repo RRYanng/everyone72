@@ -10,7 +10,7 @@
 // ============================================================
 
 import { supabase } from './supabase';
-import { Round, HoleScore, Course } from '../types';
+import { Round, HoleScore, Course, TroubleStats } from '../types';
 
 // ── Prompt Builder ────────────────────────────────────────────────────────────
 export function buildPrompt(round: Round, holeScores: HoleScore[], course: Course): string {
@@ -106,4 +106,149 @@ export async function analyzeRound(
 
   console.log('[Claude] Analysis received successfully');
   return (data as { analysis: string }).analysis;
+}
+
+// ── generatePracticePlan ──────────────────────────────────────────────────────
+// 根据本轮成绩 + 历史数据，生成个性化本周练习计划
+export async function generatePracticePlan(
+  round: Round,
+  holeScores: HoleScore[],
+  course: Course,
+  historySummary?: string   // 历史成绩摘要（可选）
+): Promise<string> {
+  const highPuttHoles = holeScores.filter(h => h.putts >= 3);
+  const troubleHoles  = holeScores.filter(h => h.troubles && h.troubles.length > 0);
+  const worstHole     = holeScores.reduce((a, b) => (b.strokes - b.par) > (a.strokes - a.par) ? b : a);
+
+  // 计算主要问题
+  const issues: string[] = [];
+  if (highPuttHoles.length >= 2) issues.push(`putting (3-putted ${highPuttHoles.length} holes)`);
+  if (troubleHoles.length >= 3)  issues.push(`course management (${troubleHoles.length} trouble holes)`);
+  if (round.score_vs_par > 10)   issues.push('overall ball striking');
+  if (issues.length === 0)       issues.push('consistency and course management');
+
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // 本周一
+
+  const prompt = `You are an elite golf coach. Based on this player's recent round, create a specific 7-day practice plan.
+
+## Round Data
+- Course: ${course.name} (Rating ${course.course_rating}, Slope ${course.slope_rating})
+- Score: ${round.total_strokes} (${round.score_vs_par > 0 ? '+' : ''}${round.score_vs_par})
+- Total putts: ${round.total_putts}
+- Worst hole: #${worstHole.hole_number} (${worstHole.strokes - worstHole.par > 0 ? '+' : ''}${worstHole.strokes - worstHole.par})
+- 3-putt holes: ${highPuttHoles.length > 0 ? highPuttHoles.map(h => `#${h.hole_number}`).join(', ') : 'none'}
+- Trouble holes: ${troubleHoles.length > 0 ? troubleHoles.map(h => `#${h.hole_number} (${h.troubles!.join('+')})`).join(', ') : 'none'}
+- Key issues: ${issues.join(', ')}
+${historySummary ? `\n## Recent History\n${historySummary}` : ''}
+
+## Instructions
+Generate a practical 7-day practice plan. Format EXACTLY like this:
+
+**🎯 This Week's Focus:** [2-3 word focus area]
+
+**📅 Your Practice Schedule:**
+
+**Mon** — [specific drill, duration, reps, target distance/count]
+**Tue** — [rest or light activity]
+**Wed** — [specific drill, duration, reps]
+**Thu** — [specific drill, duration, reps]
+**Fri** — [rest or light activity]
+**Sat** — [pre-round warmup routine, 15 min]
+**Sun** — [on-course goal for next round]
+
+**💡 Key Tip:** [One sentence most important technical tip based on the data]
+
+Keep each day's instruction to 1-2 sentences. Be specific with numbers (minutes, balls, distances). Total response: 150-200 words.`;
+
+  const { data, error } = await supabase.functions.invoke('analyze-round', {
+    body: { prompt },
+  });
+
+  if (error || !data) {
+    console.warn('[Claude] Practice plan generation failed, using fallback');
+    return generateOfflinePracticePlan(round, holeScores);
+  }
+  return (data as { analysis: string }).analysis;
+}
+
+function generateOfflinePracticePlan(round: Round, holeScores: HoleScore[]): string {
+  const highPuttHoles = holeScores.filter(h => h.putts >= 3);
+  const needsPutting  = highPuttHoles.length >= 2;
+  const focus = needsPutting ? 'Putting & Short Game' : 'Ball Striking & Course Management';
+
+  return `**🎯 This Week's Focus:** ${focus}
+
+**📅 Your Practice Schedule:**
+
+**Mon** — ${needsPutting ? '30 min putting: 10 putts each from 3ft, 6ft, 10ft. Focus on pace control.' : '40 balls with 7-iron: slow backswing, pause at top, focus on clean contact.'}
+**Tue** — Rest day. Watch one swing tip video.
+**Wed** — ${needsPutting ? '20 min lag putting from 25+ feet. Goal: all putts within 3 feet.' : '20 min chipping from tight lies, 10-15 yards. Land ball on fringe, let it roll.'}
+**Thu** — 30 min range: 10 balls each with PW, 8i, 6i, 4i. Track misses (left/right).
+**Fri** — Rest or 15 min putting green.
+**Sat** — Pre-round warmup: 5 min stretch, 10 putts, 10 chips, 5 full swings.
+**Sun** — On-course goal: max 2 putts per green, no penalty shots.
+
+**💡 Key Tip:** ${needsPutting ? 'For lag putting, focus on distance first — direction follows when speed is right.' : 'Start your downswing with your hips, not your hands.'}`;
+}
+
+// ── generateTroubleInsights ───────────────────────────────────────────────────
+// 根据最近多轮 trouble 数据，生成战术建议
+export async function generateTroubleInsights(stats: TroubleStats): Promise<string> {
+  const total = stats.water + stats.ob + stats.bunker + stats.rough + stats.other;
+  if (total === 0) return '';
+
+  const topTrouble = Object.entries({
+    water: stats.water, ob: stats.ob,
+    bunker: stats.bunker, rough: stats.rough, other: stats.other,
+  }).sort((a, b) => b[1] - a[1]).filter(e => e[1] > 0);
+
+  const prompt = `You are a strategic golf coach. Analyze this player's trouble pattern from their last ${stats.totalRounds} rounds and give tactical advice.
+
+## Trouble Statistics (last ${stats.totalRounds} rounds)
+- Water hazards: ${stats.water} times
+- Out of bounds: ${stats.ob} times
+- Bunkers: ${stats.bunker} times
+- Rough: ${stats.rough} times
+- Other: ${stats.other} times
+- Total trouble incidents: ${total}
+
+## Trouble by Hole Type
+- Par 3s: ${stats.byPar.par3} incidents
+- Par 4s: ${stats.byPar.par4} incidents
+- Par 5s: ${stats.byPar.par5} incidents
+
+## Instructions
+Give 3 specific tactical strategies to reduce trouble. Format:
+
+**1. [Strategy Name]** — [One specific actionable tactic, e.g. club selection, aim point, pre-shot routine change]
+**2. [Strategy Name]** — [One specific actionable tactic]
+**3. [Strategy Name]** — [One specific actionable tactic]
+
+Be concrete (mention specific clubs, distances, targets). Total: 80-100 words.`;
+
+  const { data, error } = await supabase.functions.invoke('analyze-round', {
+    body: { prompt },
+  });
+
+  if (error || !data) return generateOfflineTroubleAdvice(stats, topTrouble);
+  return (data as { analysis: string }).analysis;
+}
+
+function generateOfflineTroubleAdvice(
+  stats: TroubleStats,
+  topTrouble: [string, number][]
+): string {
+  const top = topTrouble[0]?.[0] ?? 'rough';
+  const adviceMap: Record<string, string> = {
+    water: 'Aim 20-30 yards away from water on approach shots. Club down one level for more control.',
+    ob: 'Tee off with a 3-wood or hybrid instead of driver on tight holes. Prioritize fairway over distance.',
+    bunker: 'When in doubt, aim for the fat of the green away from bunkers. A center-green bogey beats a sand save attempt.',
+    rough: 'From rough above ankle height, take one extra club and make a steeper swing. Never try to muscle a long iron.',
+    other: 'Play within your comfort zone. A conservative par is worth more than an aggressive double.',
+  };
+
+  return `**1. Avoid Your #1 Hazard** — ${adviceMap[top]}
+**2. Par 5 Strategy** — ${stats.byPar.par5 > stats.byPar.par4 ? 'Lay up to your comfortable yardage on par 5 second shots. Attack the pin only from the fairway.' : 'On par 4s, pick a specific target in the fairway, not just "fairway". Narrow your focus.'}
+**3. Pre-Shot Routine** — Before every shot with potential trouble, pick a safe bailout area first, then decide if the aggressive shot is worth the risk.`;
 }

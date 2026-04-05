@@ -74,3 +74,46 @@ export interface AnalysisResult {
   feedback: string;
   created_at: string;
 }
+
+// ── Phase 3 新增 ──────────────────────────────────────────────
+
+/** AI 生成的个性化练习计划 */
+export interface PracticePlan {
+  id: string;
+  user_id: string;
+  round_id?: string;
+  plan_text: string;
+  week_start: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** 用户统计 — 连续打卡 + 勋章 */
+export interface UserStats {
+  user_id: string;
+  current_streak: number;
+  longest_streak: number;
+  total_practices: number;
+  last_practice_date: string | null;
+  ai_plans_completed: number;
+  badges: Badge[];
+  updated_at: string;
+}
+
+export interface Badge {
+  id: string;
+  emoji: string;
+  label: string;
+  earned_at: string;
+}
+
+/** Trouble 聚合数据 */
+export interface TroubleStats {
+  water: number;
+  ob: number;
+  bunker: number;
+  rough: number;
+  other: number;
+  totalRounds: number;
+  byPar: { par3: number; par4: number; par5: number };
+}
