@@ -75,8 +75,8 @@ const FEATURES = [
   },
   {
     icon: '⛳' as const,
-    title: '500+ US Courses',
-    desc: 'Search from a database of 500+ real US golf courses with accurate ratings and slope.',
+    title: '262 Verified Courses',
+    desc: 'Every course has real, verified hole-by-hole par data from bluegolf.com and USGA sources. We\'d rather have 262 trustworthy courses than 500 questionable ones.',
     color: '#f3e5f5',
     accent: '#6a1b9a',
   },
@@ -172,7 +172,7 @@ export default function LandingScreen() {
         {/* Stats bar */}
         <View style={styles.statsBar}>
           {[
-            { num: '500+', label: 'US Courses' },
+            { num: '262', label: 'Verified Courses' },
             { num: 'AI', label: 'Powered by Claude' },
             { num: '100%', label: 'Free to Start' },
           ].map((s) => (
