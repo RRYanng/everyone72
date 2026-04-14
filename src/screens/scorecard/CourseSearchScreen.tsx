@@ -12,7 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Course } from '../../types';
-import { searchCourses } from '../../data/courses';
+import { searchCourses, COURSES } from '../../data/courses';
 import { RootStackParamList } from '../../navigation';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -75,6 +75,15 @@ export default function CourseSearchScreen() {
             <Ionicons name="close-circle" size={18} color="#aaa" />
           </TouchableOpacity>
         )}
+      </View>
+
+      {/* Verified data notice */}
+      <View style={styles.verifiedBanner}>
+        <Text style={styles.verifiedText}>
+          Showing {COURSES.length} verified courses. Don't see yours?{' '}
+          We only add courses with verified scorecard data.{' '}
+          Email to request: ruiyiyanng@gmail.com
+        </Text>
       </View>
 
       {/* 球场列表 */}
@@ -197,6 +206,19 @@ const styles = StyleSheet.create({
   coursePar: { fontSize: 14, fontWeight: '600', color: '#333' },
   courseRating: { fontSize: 11, color: '#888', marginTop: 3 },
   emptyText: { textAlign: 'center', color: '#888', marginTop: 40, fontSize: 15 },
+  verifiedBanner: {
+    backgroundColor: '#f0f7f0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#d4e8d4',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  verifiedText: {
+    fontSize: 11,
+    color: '#4a7c59',
+    lineHeight: 16,
+    textAlign: 'center',
+  },
 
   // Modal
   modalOverlay: {
