@@ -970,7 +970,7 @@ const RAW: RawCourse[] = [
     holes_par: [5,4,3,4,5,4,3,4,3, 4,5,3,5,4,5,4,4,3] },
 ];
 
-export const SEED_COURSES: Course[] = RAW
+export const COURSES: Course[] = RAW
   .map(c => {
     const holes = buildHoles(c);
     if (!holes) return null;
@@ -988,13 +988,13 @@ export const SEED_COURSES: Course[] = RAW
   .filter((c): c is Course => c !== null);
 
 export function getCourseById(id: string): Course | undefined {
-  return SEED_COURSES.find(c => c.id === id);
+  return COURSES.find(c => c.id === id);
 }
 
 export function searchCourses(query: string): Course[] {
   const q = query.toLowerCase().trim();
-  if (!q) return SEED_COURSES.slice(0, 50);
-  return SEED_COURSES.filter(
+  if (!q) return COURSES.slice(0, 50);
+  return COURSES.filter(
     c => c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.state.toLowerCase().includes(q)
   ).slice(0, 100);
 }

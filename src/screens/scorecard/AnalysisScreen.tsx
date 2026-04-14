@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { analyzeRound, generatePracticePlan } from '../../lib/claude';
 import { Round, HoleScore, Course, PracticePlan } from '../../types';
-import { SEED_COURSES } from '../../data/courses';
+import { COURSES } from '../../data/courses';
 import { RootStackParamList } from '../../navigation';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -97,7 +97,7 @@ export default function AnalysisScreen() {
       .eq('round_id', roundId)
       .order('hole_number');
 
-    const foundCourse = SEED_COURSES.find(c => c.id === roundData.course_id) || null;
+    const foundCourse = COURSES.find(c => c.id === roundData.course_id) || null;
 
     setRound(roundData as Round);
     setHoleScores((holesData || []) as HoleScore[]);

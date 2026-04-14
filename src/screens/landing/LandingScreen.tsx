@@ -161,6 +161,12 @@ export default function LandingScreen() {
           >
             <Text style={styles.ctaSecondaryText}>Already have an account</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.ctaDemo}
+            onPress={() => navigation.navigate('Demo')}
+          >
+            <Text style={styles.ctaDemoText}>See Live Demo →</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Stats bar */}
@@ -404,6 +410,16 @@ const styles = StyleSheet.create({
   ctaPrimaryText: { color: '#1a472a', fontSize: 16, fontWeight: '800' },
   ctaSecondary: { paddingHorizontal: 20, paddingVertical: 16 },
   ctaSecondaryText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, textDecorationLine: 'underline' },
+  ctaDemo: {
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+    minWidth: 180,
+    alignItems: 'center',
+  },
+  ctaDemoText: { color: '#d4af37', fontSize: 15, fontWeight: '700' },
   statsBar: {
     flexDirection: 'row',
     marginTop: 48,

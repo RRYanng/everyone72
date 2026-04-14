@@ -55,11 +55,15 @@ import TermsScreen from '../screens/legal/TermsScreen';
 // Landing
 import LandingScreen from '../screens/landing/LandingScreen';
 
+// Demo
+import DemoScreen from '../screens/demo/DemoScreen';
+
 // ── 导航类型定义 ──────────────────────────────────────────────
 export type AuthStackParamList = {
   Landing: undefined;
   Login: undefined;
   Register: undefined;
+  Demo: undefined;
   PrivacyPolicy: undefined;
   Terms: undefined;
 };
@@ -147,11 +151,32 @@ function UnauthenticatedStack() {
       <AuthStack.Screen name="Landing"       component={LandingScreen} />
       <AuthStack.Screen name="Login"         component={LoginScreen} />
       <AuthStack.Screen name="Register"      component={RegisterScreen} />
+      <AuthStack.Screen name="Demo"          component={DemoScreen} />
       <AuthStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <AuthStack.Screen name="Terms"         component={TermsScreen} />
     </AuthStack.Navigator>
   );
 }
+
+// ── Deep-link / web URL config ────────────────────────────────
+const linking = {
+  prefixes: [
+    'https://everyone72.vercel.app',
+    'everyone72://',
+    'http://localhost:8081',
+    'http://localhost:19006',
+  ],
+  config: {
+    screens: {
+      Landing:       '',
+      Login:         'login',
+      Register:      'register',
+      Demo:          'demo',
+      PrivacyPolicy: 'privacy',
+      Terms:         'terms',
+    },
+  },
+};
 
 // ── 根导航 ────────────────────────────────────────────────────
 export default function Navigation() {
@@ -166,7 +191,7 @@ export default function Navigation() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       {session ? <AuthenticatedStack /> : <UnauthenticatedStack />}
     </NavigationContainer>
   );

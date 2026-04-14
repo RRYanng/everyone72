@@ -13,7 +13,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { SEED_COURSES } from '../../data/courses';
+import { COURSES } from '../../data/courses';
 import { HoleScore } from '../../types';
 import { RootStackParamList } from '../../navigation';
 
@@ -47,7 +47,7 @@ export default function ScorecardScreen() {
   const { courseId, totalHoles, teeBox } = route.params;
   const { user } = useAuth();
 
-  const course = SEED_COURSES.find(c => c.id === courseId)!;
+  const course = COURSES.find(c => c.id === courseId)!;
   const holes  = course.holes.slice(0, totalHoles);
 
   const [scores, setScores] = useState<HoleScore[]>(
