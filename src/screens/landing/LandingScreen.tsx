@@ -24,6 +24,25 @@ type NavProp = NativeStackNavigationProp<AuthStackParamList, 'Landing'>;
 const { width } = Dimensions.get('window');
 const isWide = width > 768;
 
+// ── Hero value-prop cards ──────────────────────────────────────────────────
+const VALUE_PROPS = [
+  {
+    icon: '🎯',
+    title: 'AI Diagnosis',
+    desc: 'Real root-cause analysis, not just stats. Find out exactly what\'s holding you back.',
+  },
+  {
+    icon: '📋',
+    title: 'Personalized Practice Plans',
+    desc: 'Get a specific weekly drill schedule based on your actual game, not generic tips.',
+  },
+  {
+    icon: '⛳',
+    title: 'No Hardware Required',
+    desc: 'Free forever. No $300 sensors. No $99/year subscription. Just better golf.',
+  },
+];
+
 // ── Feature cards data ─────────────────────────────────────────────────────
 const FEATURES = [
   {
@@ -120,13 +139,13 @@ export default function LandingScreen() {
         </View>
 
         <Text style={styles.heroTitle}>
-          Track Every Round.{'\n'}
-          <Text style={styles.heroTitleAccent}>Improve Every Game.</Text>
+          Stop guessing.{'\n'}
+          <Text style={styles.heroTitleAccent}>Start fixing.</Text>
         </Text>
 
         <Text style={styles.heroSubtitle}>
-          Everyone 72 is the AI-powered golf companion that turns your scorecard into real coaching.
-          Log rounds in seconds, get personalized feedback after every 18.
+          The only AI golf coach that diagnoses why you're not improving — and builds a plan to fix it.{' '}
+          Free. No hardware. No subscription.
         </Text>
 
         <View style={styles.heroButtons}>
@@ -134,7 +153,7 @@ export default function LandingScreen() {
             style={styles.ctaPrimary}
             onPress={() => navigation.navigate('Register')}
           >
-            <Text style={styles.ctaPrimaryText}>Start Tracking Free →</Text>
+            <Text style={styles.ctaPrimaryText}>Get Your First Diagnosis Free →</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.ctaSecondary}
@@ -157,6 +176,17 @@ export default function LandingScreen() {
             </View>
           ))}
         </View>
+      </View>
+
+      {/* ── Value Props ───────────────────────────────────────────────────── */}
+      <View style={styles.valuePropSection}>
+        {VALUE_PROPS.map((v) => (
+          <View key={v.title} style={styles.valuePropCard}>
+            <Text style={styles.valuePropIcon}>{v.icon}</Text>
+            <Text style={styles.valuePropTitle}>{v.title}</Text>
+            <Text style={styles.valuePropDesc}>{v.desc}</Text>
+          </View>
+        ))}
       </View>
 
       {/* ── Scorecard Preview ─────────────────────────────────────────────── */}
@@ -265,11 +295,18 @@ export default function LandingScreen() {
           style={styles.finalCtaBtn}
           onPress={() => navigation.navigate('Register')}
         >
-          <Text style={styles.finalCtaBtnText}>Create Free Account →</Text>
+          <Text style={styles.finalCtaBtnText}>Get Your First Diagnosis Free →</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
           <Text style={styles.finalSignIn}>Already a member? Sign in</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* ── Footer Tagline ────────────────────────────────────────────────── */}
+      <View style={styles.footerTaglineSection}>
+        <Text style={styles.footerTaglineCopy}>
+          Built by a golfer, for golfers who want to actually get better — not just track numbers.
+        </Text>
       </View>
 
       {/* ── Footer ────────────────────────────────────────────────────────── */}
@@ -348,7 +385,7 @@ const styles = StyleSheet.create({
   },
   heroTitleAccent: { color: '#d4af37' },
   heroSubtitle: {
-    fontSize: isWide ? 18 : 15,
+    fontSize: isWide ? 20 : 17,
     color: '#a8d5b5',
     textAlign: 'center',
     lineHeight: 26,
@@ -380,6 +417,45 @@ const styles = StyleSheet.create({
   statItem: { alignItems: 'center' },
   statNum: { fontSize: 28, fontWeight: '900', color: '#d4af37' },
   statLabel: { fontSize: 12, color: '#a8d5b5', marginTop: 4 },
+
+  // Value Props
+  valuePropSection: {
+    flexDirection: isWide ? 'row' : 'column',
+    gap: 16,
+    paddingHorizontal: isWide ? 80 : 24,
+    paddingVertical: 40,
+    backgroundColor: '#0f2d1a',
+    justifyContent: 'center',
+  },
+  valuePropCard: {
+    flex: isWide ? 1 : undefined,
+    backgroundColor: '#1a472a',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.3)',
+  },
+  valuePropIcon: { fontSize: 28, marginBottom: 10 },
+  valuePropTitle: { fontSize: 16, fontWeight: '800', color: '#d4af37', marginBottom: 8 },
+  valuePropDesc: { fontSize: 14, color: '#a8d5b5', lineHeight: 21 },
+
+  // Footer tagline
+  footerTaglineSection: {
+    backgroundColor: '#fff',
+    paddingHorizontal: isWide ? 80 : 24,
+    paddingVertical: 28,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  footerTaglineCopy: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    lineHeight: 22,
+    maxWidth: 520,
+  },
 
   // Section headers
   sectionHeader: { alignItems: 'center', marginBottom: 40 },
