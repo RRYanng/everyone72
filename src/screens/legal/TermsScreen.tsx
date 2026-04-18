@@ -35,7 +35,7 @@ const SECTIONS = [
     body:
       'You are responsible for maintaining the confidentiality of your account credentials. ' +
       'You are responsible for all activity that occurs under your account. ' +
-      'Notify us immediately at support@everyone72.com if you suspect unauthorized use.',
+      'Notify us immediately at ruiyiyanng@gmail.com if you suspect unauthorized use.',
   },
   {
     title: '4. User Content',
@@ -74,7 +74,7 @@ const SECTIONS = [
     title: '8. Termination',
     body:
       'We reserve the right to suspend or terminate your account for violation of these terms. ' +
-      'You may delete your account at any time by contacting support@everyone72.com.',
+      'You may delete your account at any time by contacting ruiyiyanng@gmail.com.',
   },
   {
     title: '9. Changes to Terms',
@@ -87,7 +87,7 @@ const SECTIONS = [
     title: '10. Contact',
     body:
       'Questions about these Terms? Contact us:\n\n' +
-      'Email: support@everyone72.com\n' +
+      'Email: ruiyiyanng@gmail.com\n' +
       'Website: https://everyone72.com',
   },
 ];

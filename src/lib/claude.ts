@@ -192,6 +192,173 @@ function generateOfflinePracticePlan(round: Round, holeScores: HoleScore[]): str
 **💡 Key Tip:** ${needsPutting ? 'For lag putting, focus on distance first — direction follows when speed is right.' : 'Start your downswing with your hips, not your hands.'}`;
 }
 
+// ── generateDiagnosisReport ───────────────────────────────────────────────────
+// 传入最近 5-10 轮全量数据，返回结构化的 4-part 诊断报告
+
+export interface DiagnosisReport {
+  coreIssue: string;
+  dataEvidence: string;
+  rootCause: string;
+  practicePlan: string;
+  raw: string;
+}
+
+function parseDiagnosisReport(raw: string): DiagnosisReport {
+  const extract = (tag: string): string => {
+    const regex = new RegExp(`<<${tag}>>([\\s\\S]*?)(?=<<[A-Z_]+>>|$)`, 'i');
+    const m = raw.match(regex);
+    return m ? m[1].trim() : '';
+  };
+  return {
+    coreIssue:    extract('CORE_ISSUE'),
+    dataEvidence: extract('DATA_EVIDENCE'),
+    rootCause:    extract('ROOT_CAUSE'),
+    practicePlan: extract('PRACTICE_PLAN'),
+    raw,
+  };
+}
+
+function buildDiagnosisPrompt(rounds: Round[], allHoleScores: HoleScore[]): string {
+  // ── Per-round stats ──────────────────────────────────────────────────────────
+  const roundRows = rounds.map((r, i) => {
+    const holes = allHoleScores.filter(h => h.round_id === r.id);
+    const threePutts = holes.filter(h => h.putts >= 3).length;
+    const troubles   = holes.flatMap(h => h.troubles ?? []);
+    const water  = troubles.filter(t => t === 'water').length;
+    const ob     = troubles.filter(t => t === 'ob').length;
+    const bunker = troubles.filter(t => t === 'bunker').length;
+    const rough  = troubles.filter(t => t === 'rough').length;
+    const courseName = (r as any).courses?.name ?? `Course ${i + 1}`;
+    const rating     = (r as any).courses?.course_rating ?? '?';
+    const slope      = (r as any).courses?.slope_rating ?? '?';
+    const date       = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `| ${i + 1} | ${date} | ${courseName} | ${rating}/${slope} | ${r.total_strokes} | ${r.score_vs_par > 0 ? '+' : ''}${r.score_vs_par} | ${r.total_putts} | ${threePutts} | W:${water} OB:${ob} B:${bunker} R:${rough} |`;
+  });
+
+  // ── Aggregated stats ─────────────────────────────────────────────────────────
+  const n = rounds.length;
+  const avgScoreVsPar = +(rounds.reduce((s, r) => s + r.score_vs_par, 0) / n).toFixed(1);
+  const avgPutts      = +(rounds.reduce((s, r) => s + r.total_putts, 0) / n).toFixed(1);
+  const totalHoles    = allHoleScores.length;
+  const threePuttTotal = allHoleScores.filter(h => h.putts >= 3).length;
+  const threePuttRate  = totalHoles > 0 ? +((threePuttTotal / totalHoles) * 100).toFixed(1) : 0;
+
+  const allTroubles = allHoleScores.flatMap(h => h.troubles ?? []);
+  const tWater  = allTroubles.filter(t => t === 'water').length;
+  const tOB     = allTroubles.filter(t => t === 'ob').length;
+  const tBunker = allTroubles.filter(t => t === 'bunker').length;
+  const tRough  = allTroubles.filter(t => t === 'rough').length;
+  const tOther  = allTroubles.filter(t => t === 'other').length;
+  const tTotal  = allTroubles.length;
+  const troublePerRound = +(tTotal / n).toFixed(1);
+
+  const tPar3 = allHoleScores.filter(h => h.par === 3 && (h.troubles?.length ?? 0) > 0).length;
+  const tPar4 = allHoleScores.filter(h => h.par === 4 && (h.troubles?.length ?? 0) > 0).length;
+  const tPar5 = allHoleScores.filter(h => h.par === 5 && (h.troubles?.length ?? 0) > 0).length;
+
+  // Scoring breakdown per hole
+  let eagles = 0, birdies = 0, pars = 0, bogeys = 0, doubles = 0;
+  allHoleScores.forEach(h => {
+    const d = h.strokes - h.par;
+    if (d <= -2) eagles++;
+    else if (d === -1) birdies++;
+    else if (d === 0) pars++;
+    else if (d === 1) bogeys++;
+    else doubles++;
+  });
+
+  return `You are a PGA-level golf coach and data scientist. Analyze this player's last ${n} rounds of detailed scorecard data and produce a brutally honest, data-driven diagnosis. Your goal: identify the one or two issues that are costing the most strokes per round, backed by specific numbers.
+
+## Round-by-Round Summary
+| # | Date | Course | Rating/Slope | Score | vs Par | Putts | 3-Putts | Troubles |
+|---|------|--------|-------------|-------|--------|-------|---------|---------|
+${roundRows.join('\n')}
+
+## Aggregated Statistics (all ${n} rounds)
+- Average score vs par: ${avgScoreVsPar > 0 ? '+' : ''}${avgScoreVsPar}
+- Average putts per round: ${avgPutts}
+- 3-putt rate: ${threePuttRate}% of greens (${threePuttTotal} total 3-putts in ${totalHoles} holes)
+- Trouble incidents: ${troublePerRound}/round (${tTotal} total) — Water: ${tWater}, OB: ${tOB}, Bunker: ${tBunker}, Rough: ${tRough}, Other: ${tOther}
+- Trouble by hole type: Par 3s: ${tPar3}, Par 4s: ${tPar4}, Par 5s: ${tPar5}
+- Scoring breakdown: Eagles/better: ${eagles}, Birdies: ${birdies}, Pars: ${pars}, Bogeys: ${bogeys}, Doubles+: ${doubles}
+
+## Output Format
+Use EXACTLY these four section markers (include the << >> delimiters):
+
+<<CORE_ISSUE>>
+State the 1-2 most damaging, specific problems (e.g., "chronic lag putting — 3-putts on ${threePuttRate}% of greens" not just "putting needs work"). Name the exact failure mode. Cite the data inline. Be blunt. 2-3 sentences per issue. Max 120 words.
+
+<<DATA_EVIDENCE>>
+3-5 bullet points of the specific numbers that prove the diagnosis. Go beyond the obvious — calculate rates, identify patterns across rounds, note any outlier rounds. Include context (e.g., compare to typical amateur benchmarks: avg amateur 3-putts ~8-10% of greens, bogey golfer loses ~3 strokes/round to full swings from rough). Max 100 words.
+
+<<ROOT_CAUSE>>
+2-3 hypotheses for WHY this is happening. Each must be specific and testable — not "poor technique" but "over-aggressive club selection on approaches leading to long first putts." Label them: "Hypothesis 1: [Name] — [explanation]". Max 120 words.
+
+<<PRACTICE_PLAN>>
+One targeted drill/intervention per hypothesis. Include: drill name, exact protocol (reps, duration, distances, equipment), and a measurable success metric. Label: "Fix for Hypothesis 1: [Drill] — [exact instructions] — Goal: [metric]". Be a coach, not a cheerleader. Max 150 words.
+
+Do not use any other headers or formatting outside of these four sections.`;
+}
+
+function generateOfflineDiagnosis(rounds: Round[], allHoleScores: HoleScore[]): DiagnosisReport {
+  const n = rounds.length;
+  const avgScoreVsPar = +(rounds.reduce((s, r) => s + r.score_vs_par, 0) / n).toFixed(1);
+  const avgPutts      = +(rounds.reduce((s, r) => s + r.total_putts, 0) / n).toFixed(1);
+  const threePutts    = allHoleScores.filter(h => h.putts >= 3).length;
+  const troubles      = allHoleScores.flatMap(h => h.troubles ?? []);
+  const tTotal        = troubles.length;
+  const tBunker       = troubles.filter(t => t === 'bunker').length;
+  const tWater        = troubles.filter(t => t === 'water').length;
+  const topIssue      = avgPutts > 34 ? 'putting' : tTotal / n > 3 ? 'course management' : 'ball striking';
+
+  const raw = `<<CORE_ISSUE>>
+Based on ${n} rounds, your biggest issue is ${topIssue}. Averaging ${avgScoreVsPar > 0 ? '+' : ''}${avgScoreVsPar} per round with ${avgPutts} putts/round, the data points to strokes being lost ${topIssue === 'putting' ? 'on the greens' : 'in hazards and rough'}.
+
+<<DATA_EVIDENCE>>
+• Average score vs par: ${avgScoreVsPar > 0 ? '+' : ''}${avgScoreVsPar} (bogey golfer benchmark: +18)
+• Average putts per round: ${avgPutts} (amateur average: 33–36)
+• 3-putt incidents: ${threePutts} over ${n} rounds (${+(threePutts / n).toFixed(1)}/round)
+• Trouble incidents: ${+(tTotal / n).toFixed(1)}/round (bunkers: ${tBunker}, water: ${tWater})
+
+<<ROOT_CAUSE>>
+Hypothesis 1: Distance Control — Approach shots leaving putts from 30+ feet, making 3-putts inevitable.
+Hypothesis 2: Club Selection — Aggressive plays near water/bunkers increasing penalty risk.
+Hypothesis 3: Pre-Shot Routine — Inconsistent alignment causing directional errors in key moments.
+
+<<PRACTICE_PLAN>>
+Fix for Hypothesis 1: Lag Putting Ladder — 10 putts each from 20ft, 30ft, 40ft. Goal: all stop within 3ft. 3×/week, 20 min.
+Fix for Hypothesis 2: Course Management Review — Before each round, mark 2 holes where you will lay up regardless. Track whether that changes your score on those holes.
+Fix for Hypothesis 3: Alignment Stick Drill — Place 2 sticks on range to frame your stance. 50 balls/session until setup is automatic.`;
+
+  return parseDiagnosisReport(raw);
+}
+
+export async function generateDiagnosisReport(
+  rounds: Round[],
+  allHoleScores: HoleScore[]
+): Promise<DiagnosisReport> {
+  const prompt = buildDiagnosisPrompt(rounds, allHoleScores);
+
+  const { data, error } = await supabase.functions.invoke('analyze-round', {
+    body: { prompt },
+  });
+
+  if (error || !data) {
+    console.warn('[Claude] Diagnosis generation failed, using offline fallback');
+    return generateOfflineDiagnosis(rounds, allHoleScores);
+  }
+
+  const raw = (data as { analysis: string }).analysis;
+  const report = parseDiagnosisReport(raw);
+
+  // Fallback: if parsing failed (empty sections), use offline
+  if (!report.coreIssue && !report.dataEvidence) {
+    return generateOfflineDiagnosis(rounds, allHoleScores);
+  }
+
+  return report;
+}
+
 // ── generateTroubleInsights ───────────────────────────────────────────────────
 // 根据最近多轮 trouble 数据，生成战术建议
 export async function generateTroubleInsights(stats: TroubleStats): Promise<string> {

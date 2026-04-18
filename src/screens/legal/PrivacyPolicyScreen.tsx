@@ -65,7 +65,7 @@ const SECTIONS: Section[] = [
     title: '6. Data Retention',
     body:
       'We retain your data as long as your account is active. ' +
-      'You can request account deletion by emailing privacy@everyone72.com — ' +
+      'You can request account deletion by emailing ruiyiyanng@gmail.com — ' +
       'we will delete all your data within 30 days.',
   },
   {
@@ -83,7 +83,7 @@ const SECTIONS: Section[] = [
       '• Correct inaccurate data\n' +
       '• Request deletion of your data\n' +
       '• Export your data in a portable format\n\n' +
-      'To exercise these rights, contact us at privacy@everyone72.com.',
+      'To exercise these rights, contact us at ruiyiyanng@gmail.com.',
   },
   {
     title: '9. Changes to This Policy',
@@ -96,7 +96,7 @@ const SECTIONS: Section[] = [
     title: '10. Contact Us',
     body:
       'If you have questions about this Privacy Policy, contact us at:\n\n' +
-      'Email: privacy@everyone72.com\n' +
+      'Email: ruiyiyanng@gmail.com\n' +
       'Website: https://everyone72.com',
   },
 ];

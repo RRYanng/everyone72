@@ -40,21 +40,14 @@ const storageAdapter = Platform.OS === 'web' ? WebStorageAdapter : NativeStorage
 // ── Config — EXPO_PUBLIC_* 는 빌드 타임에 번들에 삽입됨 ─────────────────────
 // Supabase URL/anon key는 공개값 (클라이언트 번들에 항상 노출됨).
 // 보안은 Supabase RLS(Row Level Security)가 담당.
-const supabaseUrl: string =
-  process.env.EXPO_PUBLIC_SUPABASE_URL ||
-  'https://sgpalmmblxfqgbfamgwc.supabase.co';
+const supabaseUrl: string = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const supabaseAnonKey: string = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-const supabaseAnonKey: string =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  'sb_publishable_Bxs0CgDd06kdDcDJvuNaqw_LAtQI02A';
-
-if (__DEV__) {
-  if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
-    console.warn('[Supabase] EXPO_PUBLIC_SUPABASE_URL not set — using fallback');
-  }
-  if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
-    console.warn('[Supabase] EXPO_PUBLIC_SUPABASE_ANON_KEY not set — using fallback');
-  }
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    '[Supabase] Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. ' +
+    'Copy .env.example to .env and fill in values.'
+  );
 }
 
 // ── Client ───────────────────────────────────────────────────────────────────

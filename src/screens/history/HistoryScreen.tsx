@@ -1,5 +1,5 @@
 // ============================================================
-// 历史成绩界面 — 列出所有已打完的轮次 + 成绩趋势图 + 差点
+// 历史成绩界面 — Rounds tab + My Diagnosis tab
 // ============================================================
 
 import React, { useState, useCallback } from 'react';
@@ -14,36 +14,49 @@ import { Ionicons } from '@expo/vector-icons';
 import { LineChart } from 'react-native-chart-kit';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { Round } from '../../types';
-import { RootStackParamList } from '../../navigation';
+import { Round, HoleScore } from '../../types';
 import { TroubleStats } from '../../types';
-import { generateTroubleInsights } from '../../lib/claude';
+import { RootStackParamList } from '../../navigation';
+import { generateTroubleInsights, generateDiagnosisReport, DiagnosisReport } from '../../lib/claude';
+import CoachWaitlistModal from './CoachWaitlistModal';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
+type TabType = 'rounds' | 'diagnosis';
 
 const SCREEN_W = Dimensions.get('window').width;
+const MIN_ROUNDS_FOR_DIAGNOSIS = 5;
 
-// 差点估算：取最近 20 轮中最好的一半成绩（最多 8 轮）的平均 score_vs_par
 function calcHandicap(rounds: Round[]): number | null {
   if (rounds.length === 0) return null;
   const diffs = [...rounds].map(r => r.score_vs_par).sort((a, b) => a - b);
-  const take = Math.min(Math.ceil(diffs.length / 2), 8);
-  const best = diffs.slice(0, take);
-  const avg = best.reduce((s, d) => s + d, 0) / best.length;
+  const take  = Math.min(Math.ceil(diffs.length / 2), 8);
+  const best  = diffs.slice(0, take);
+  const avg   = best.reduce((s, d) => s + d, 0) / best.length;
   return Math.round(avg * 10) / 10;
 }
 
 export default function HistoryScreen() {
   const navigation = useNavigation<NavProp>();
-  const { user } = useAuth();
-  const [rounds, setRounds] = useState<Round[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [troubleStats, setTroubleStats] = useState<TroubleStats | null>(null);
+  const { user }   = useAuth();
+
+  // ── Rounds tab state ───────────────────────────────────────
+  const [rounds,         setRounds]         = useState<Round[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [refreshing,     setRefreshing]     = useState(false);
+  const [troubleStats,   setTroubleStats]   = useState<TroubleStats | null>(null);
   const [troubleInsight, setTroubleInsight] = useState<string>('');
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [insightExpanded, setInsightExpanded] = useState(false);
 
+  // ── Diagnosis tab state ────────────────────────────────────
+  const [activeTab,          setActiveTab]          = useState<TabType>('rounds');
+  const [diagnosisReport,    setDiagnosisReport]    = useState<DiagnosisReport | null>(null);
+  const [loadingDiagnosis,   setLoadingDiagnosis]   = useState(false);
+  const [diagnosisFetched,   setDiagnosisFetched]   = useState(false);
+  const [diagnosisError,     setDiagnosisError]     = useState('');
+  const [showWaitlist,       setShowWaitlist]       = useState(false);
+
+  // ── Data fetching ─────────────────────────────────────────
   useFocusEffect(
     useCallback(() => {
       fetchRounds();
@@ -54,24 +67,23 @@ export default function HistoryScreen() {
     if (!user) { setLoading(false); setRefreshing(false); return; }
     const { data } = await supabase
       .from('rounds')
-      .select('*, courses(name, city, state)')
+      .select('*, courses(name, city, state, course_rating, slope_rating, total_par)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
-    if (data) setRounds(data as Round[]);
 
-    // Trouble Insights：只有 3 轮以上才分析
-    if (data && data.length >= 3) {
-      analyzeTroubles(data.slice(0, 10) as Round[]);
+    if (data) {
+      setRounds(data as Round[]);
+      if (data.length >= 3) analyzeTroubles(data.slice(0, 10) as Round[]);
+      // Reset cached diagnosis if new round added
+      setDiagnosisFetched(false);
+      setDiagnosisReport(null);
     }
-
     setLoading(false);
     setRefreshing(false);
   };
 
   const analyzeTroubles = async (recentRounds: Round[]) => {
     if (!user || recentRounds.length < 3) return;
-
-    // 获取这些轮次的 hole_scores
     const roundIds = recentRounds.map(r => r.id);
     const { data: holesData } = await supabase
       .from('hole_scores')
@@ -80,24 +92,21 @@ export default function HistoryScreen() {
 
     if (!holesData || holesData.length === 0) return;
 
-    // 聚合 trouble 数据
     const stats: TroubleStats = {
       water: 0, ob: 0, bunker: 0, rough: 0, other: 0,
       totalRounds: recentRounds.length,
       byPar: { par3: 0, par4: 0, par5: 0 },
     };
-
     (holesData as any[]).forEach(hole => {
       const t: string[] = hole.troubles ?? [];
       if (t.length === 0) return;
       t.forEach(tr => {
-        if (tr === 'water')  stats.water++;
-        else if (tr === 'ob') stats.ob++;
+        if (tr === 'water')       stats.water++;
+        else if (tr === 'ob')     stats.ob++;
         else if (tr === 'bunker') stats.bunker++;
-        else if (tr === 'rough') stats.rough++;
-        else stats.other++;
+        else if (tr === 'rough')  stats.rough++;
+        else                      stats.other++;
       });
-      // 按 par 分类
       if (hole.par === 3)      stats.byPar.par3++;
       else if (hole.par === 4) stats.byPar.par4++;
       else if (hole.par === 5) stats.byPar.par5++;
@@ -107,18 +116,47 @@ export default function HistoryScreen() {
     if (totalTrouble === 0) return;
 
     setTroubleStats(stats);
-
-    // 生成 AI 建议
     setLoadingInsight(true);
     try {
       const insight = await generateTroubleInsights(stats);
       setTroubleInsight(insight);
-    } catch {
-      setTroubleInsight('');
-    }
+    } catch { setTroubleInsight(''); }
     setLoadingInsight(false);
   };
 
+  const fetchDiagnosis = async () => {
+    if (!user || diagnosisFetched || loadingDiagnosis) return;
+    setLoadingDiagnosis(true);
+    setDiagnosisError('');
+
+    const diagRounds = rounds.slice(0, 10);
+    const roundIds   = diagRounds.map(r => r.id);
+
+    const { data: holesData } = await supabase
+      .from('hole_scores')
+      .select('round_id, hole_number, par, strokes, putts, troubles')
+      .in('round_id', roundIds);
+
+    const allHoles = (holesData ?? []) as HoleScore[];
+
+    try {
+      const report = await generateDiagnosisReport(diagRounds, allHoles);
+      setDiagnosisReport(report);
+    } catch {
+      setDiagnosisError('Could not generate diagnosis. Check your connection and try again.');
+    }
+    setDiagnosisFetched(true);
+    setLoadingDiagnosis(false);
+  };
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    if (tab === 'diagnosis' && !diagnosisFetched) {
+      fetchDiagnosis();
+    }
+  };
+
+  // ── Helpers ───────────────────────────────────────────────
   const scoreColor = (vs_par: number) => {
     if (vs_par <= 0) return '#d4af37';
     if (vs_par <= 5) return '#4caf50';
@@ -126,31 +164,27 @@ export default function HistoryScreen() {
     return '#f44336';
   };
 
-  const avgScore = rounds.length > 0
-    ? (rounds.reduce((s, r) => s + r.total_strokes, 0) / rounds.length).toFixed(1)
-    : null;
+  const avgScore  = rounds.length > 0
+    ? (rounds.reduce((s, r) => s + r.total_strokes, 0) / rounds.length).toFixed(1) : null;
   const bestScore = rounds.length > 0
-    ? Math.min(...rounds.map(r => r.total_strokes))
-    : null;
-  const handicap = calcHandicap(rounds.slice(0, 20));
+    ? Math.min(...rounds.map(r => r.total_strokes)) : null;
+  const handicap  = calcHandicap(rounds.slice(0, 20));
 
-  // 折线图数据（时间正序，最多显示最近 10 轮）
   const chartRounds = [...rounds].reverse().slice(-10);
-  const showChart = chartRounds.length >= 2;
-  const chartData = {
+  const showChart   = chartRounds.length >= 2;
+  const chartData   = {
     labels: chartRounds.map((_, i) =>
       i === 0 || i === chartRounds.length - 1 || chartRounds.length <= 5
-        ? `R${rounds.length - chartRounds.length + i + 1}`
-        : ''
+        ? `R${rounds.length - chartRounds.length + i + 1}` : ''
     ),
-    datasets: [{
-      data: chartRounds.map(r => r.total_strokes),
-      color: () => '#d4af37',
-      strokeWidth: 2,
-    }],
+    datasets: [{ data: chartRounds.map(r => r.total_strokes), color: () => '#d4af37', strokeWidth: 2 }],
   };
 
-  const renderItem = ({ item }: { item: Round }) => (
+  const showTabs = rounds.length >= MIN_ROUNDS_FOR_DIAGNOSIS;
+
+  // ── Render helpers ─────────────────────────────────────────
+
+  const renderRoundItem = ({ item }: { item: Round }) => (
     <TouchableOpacity
       style={styles.card}
       onPress={() => navigation.navigate('Analysis', { roundId: item.id })}
@@ -162,9 +196,8 @@ export default function HistoryScreen() {
         </Text>
         <Text style={styles.cardDate}>
           {new Date(item.created_at).toLocaleDateString('en-US', {
-            weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
-          })}
-          {'  ·  '}{item.total_holes} holes
+            weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+          })}{'  ·  '}{item.total_holes} holes
         </Text>
         {item.ai_feedback && (
           <View style={styles.aiBadge}>
@@ -186,9 +219,8 @@ export default function HistoryScreen() {
     </TouchableOpacity>
   );
 
-  const ListHeader = () => (
+  const RoundsListHeader = () => (
     <>
-      {/* 折线图 */}
       {showChart && (
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Score Trend</Text>
@@ -214,7 +246,7 @@ export default function HistoryScreen() {
           <Text style={styles.chartHint}>Last {chartRounds.length} rounds (oldest → newest)</Text>
         </View>
       )}
-      {/* Trouble Insights 卡片（需要 3 轮以上数据） */}
+
       {troubleStats && (
         <View style={styles.insightCard}>
           <TouchableOpacity
@@ -233,7 +265,6 @@ export default function HistoryScreen() {
 
           {insightExpanded && (
             <>
-              {/* Trouble 统计 */}
               <View style={styles.insightStats}>
                 {[
                   { emoji: '💧', label: 'Water',  count: troubleStats.water },
@@ -248,8 +279,6 @@ export default function HistoryScreen() {
                   </View>
                 ))}
               </View>
-
-              {/* 按 Par 分析 */}
               <View style={styles.insightParRow}>
                 <Text style={styles.insightParLabel}>Par 3:</Text>
                 <Text style={styles.insightParVal}>{troubleStats.byPar.par3} incidents</Text>
@@ -258,8 +287,6 @@ export default function HistoryScreen() {
                 <Text style={styles.insightParLabel}>Par 5:</Text>
                 <Text style={styles.insightParVal}>{troubleStats.byPar.par5} incidents</Text>
               </View>
-
-              {/* AI 建议 */}
               <View style={styles.insightAI}>
                 <Text style={styles.insightAITitle}>🤖 AI Strategy Advice</Text>
                 {loadingInsight ? (
@@ -267,25 +294,6 @@ export default function HistoryScreen() {
                 ) : (
                   <Text style={styles.insightAIText}>{troubleInsight || 'No data yet.'}</Text>
                 )}
-              </View>
-
-              {/* Premium upsell — deep analysis */}
-              <View style={styles.premiumLock}>
-                <View style={styles.premiumLockContent}>
-                  <Text style={styles.premiumLockIcon}>🔒</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.premiumLockTitle}>Full Trouble Report</Text>
-                    <Text style={styles.premiumLockSub}>
-                      Hole-by-hole breakdown, Strokes Gained analysis, and a personalized course-management plan.
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.premiumLockBtn}>
-                  <Text style={styles.premiumLockBtnText}>🔒 Unlock with Premium</Text>
-                  <View style={styles.comingSoonBadge}>
-                    <Text style={styles.comingSoonBadgeText}>Coming Soon</Text>
-                  </View>
-                </View>
               </View>
             </>
           )}
@@ -298,14 +306,159 @@ export default function HistoryScreen() {
     </>
   );
 
+  // ── Diagnosis section components ──────────────────────────
+
+  const DiagnosisSectionCard = ({
+    icon, color, bgColor, title, content,
+  }: {
+    icon: string; color: string; bgColor: string; title: string; content: string;
+  }) => (
+    <View style={[styles.diagSection, { borderLeftColor: color }]}>
+      <View style={styles.diagSectionHeader}>
+        <View style={[styles.diagSectionIconBg, { backgroundColor: bgColor }]}>
+          <Text style={styles.diagSectionIcon}>{icon}</Text>
+        </View>
+        <Text style={[styles.diagSectionTitle, { color }]}>{title}</Text>
+      </View>
+      <Text style={styles.diagSectionContent}>{content}</Text>
+    </View>
+  );
+
+  const DiagnosisContent = () => {
+    if (loadingDiagnosis) {
+      return (
+        <View style={styles.diagLoading}>
+          <ActivityIndicator size="large" color="#1a472a" />
+          <Text style={styles.diagLoadingTitle}>Analyzing your game...</Text>
+          <Text style={styles.diagLoadingSub}>
+            Claude is reviewing your last {Math.min(rounds.length, 10)} rounds of data
+          </Text>
+        </View>
+      );
+    }
+
+    if (diagnosisError) {
+      return (
+        <View style={styles.diagError}>
+          <Text style={styles.diagErrorEmoji}>⚠️</Text>
+          <Text style={styles.diagErrorText}>{diagnosisError}</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => { setDiagnosisFetched(false); fetchDiagnosis(); }}
+          >
+            <Text style={styles.retryBtnText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (!diagnosisReport) {
+      return (
+        <View style={styles.diagLoading}>
+          <ActivityIndicator size="large" color="#1a472a" />
+          <Text style={styles.diagLoadingTitle}>Preparing diagnosis...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView
+        style={styles.diagScroll}
+        contentContainerStyle={styles.diagScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Banner */}
+        <View style={styles.diagBanner}>
+          <Text style={styles.diagBannerEmoji}>🏥</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.diagBannerTitle}>Your Golf Diagnosis</Text>
+            <Text style={styles.diagBannerSub}>
+              Based on your last {Math.min(rounds.length, 10)} rounds · AI-powered analysis
+            </Text>
+          </View>
+        </View>
+
+        {/* 4 sections */}
+        {diagnosisReport.coreIssue ? (
+          <DiagnosisSectionCard
+            icon="🎯"
+            color="#c62828"
+            bgColor="#ffebee"
+            title="Core Issue"
+            content={diagnosisReport.coreIssue}
+          />
+        ) : null}
+
+        {diagnosisReport.dataEvidence ? (
+          <DiagnosisSectionCard
+            icon="📊"
+            color="#1565c0"
+            bgColor="#e3f2fd"
+            title="Data Evidence"
+            content={diagnosisReport.dataEvidence}
+          />
+        ) : null}
+
+        {diagnosisReport.rootCause ? (
+          <DiagnosisSectionCard
+            icon="🔬"
+            color="#6a1b9a"
+            bgColor="#f3e5f5"
+            title="Root Cause Hypothesis"
+            content={diagnosisReport.rootCause}
+          />
+        ) : null}
+
+        {diagnosisReport.practicePlan ? (
+          <DiagnosisSectionCard
+            icon="🏋️"
+            color="#1a472a"
+            bgColor="#e8f5e9"
+            title="Specific Practice Plan"
+            content={diagnosisReport.practicePlan}
+          />
+        ) : null}
+
+        {/* Coach CTA */}
+        <View style={styles.coachCTA}>
+          <Text style={styles.coachCTATitle}>Want a coach to help you fix this?</Text>
+          <Text style={styles.coachCTASub}>
+            We'll match you with a local PGA instructor who specializes in exactly your weaknesses.
+          </Text>
+          <TouchableOpacity
+            style={styles.coachCTABtn}
+            onPress={() => setShowWaitlist(true)}
+          >
+            <Text style={styles.coachCTABtnText}>Get matched with a local pro →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Refresh */}
+        <TouchableOpacity
+          style={styles.refreshDiagBtn}
+          onPress={() => { setDiagnosisFetched(false); fetchDiagnosis(); }}
+        >
+          <Ionicons name="refresh" size={14} color="#888" />
+          <Text style={styles.refreshDiagText}>Regenerate diagnosis</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.diagDisclaimer}>
+          AI analysis is for practice guidance only. Not a substitute for professional coaching.
+        </Text>
+      </ScrollView>
+    );
+  };
+
+  // ── Main render ───────────────────────────────────────────
+
   return (
     <SafeAreaView style={styles.safe}>
-      {/* 顶部 */}
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Round History</Text>
       </View>
 
-      {/* 摘要统计 */}
+      {/* Stats bar */}
       {rounds.length > 0 && (
         <View style={styles.statsBar}>
           <View style={styles.statItem}>
@@ -332,19 +485,49 @@ export default function HistoryScreen() {
         </View>
       )}
 
+      {/* Tab switcher — only when ≥5 rounds */}
+      {showTabs && (
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'rounds' && styles.tabBtnActive]}
+            onPress={() => handleTabChange('rounds')}
+          >
+            <Text style={[styles.tabBtnText, activeTab === 'rounds' && styles.tabBtnTextActive]}>
+              Rounds
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'diagnosis' && styles.tabBtnActive]}
+            onPress={() => handleTabChange('diagnosis')}
+          >
+            <View style={styles.tabBtnInner}>
+              <Text style={[styles.tabBtnText, activeTab === 'diagnosis' && styles.tabBtnTextActive]}>
+                My Diagnosis
+              </Text>
+              <View style={styles.tabNewBadge}>
+                <Text style={styles.tabNewBadgeText}>AI</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#1a472a" />
         </View>
-      ) : (
+      ) : activeTab === 'rounds' || !showTabs ? (
         <FlatList
           data={rounds}
           keyExtractor={item => item.id}
-          renderItem={renderItem}
-          ListHeaderComponent={<ListHeader />}
+          renderItem={renderRoundItem}
+          ListHeaderComponent={<RoundsListHeader />}
           contentContainerStyle={{ padding: 12, paddingBottom: 32 }}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchRounds(); }} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); fetchRounds(); }}
+            />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -356,20 +539,24 @@ export default function HistoryScreen() {
             </View>
           }
         />
+      ) : (
+        <DiagnosisContent />
       )}
+
+      <CoachWaitlistModal
+        visible={showWaitlist}
+        onClose={() => setShowWaitlist(false)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f5f5f0' },
+  safe:   { flex: 1, backgroundColor: '#f5f5f0' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    backgroundColor: '#1a472a',
-    padding: 20,
-    paddingTop: 8,
-  },
+  header: { backgroundColor: '#1a472a', padding: 20, paddingTop: 8 },
   headerTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+
   statsBar: {
     flexDirection: 'row',
     backgroundColor: '#1a472a',
@@ -377,10 +564,57 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     justifyContent: 'center',
   },
-  statItem: { flex: 1, alignItems: 'center' },
-  statNum: { color: '#d4af37', fontSize: 20, fontWeight: 'bold' },
-  statLabel: { color: '#a8d5b5', fontSize: 10, marginTop: 2 },
+  statItem:    { flex: 1, alignItems: 'center' },
+  statNum:     { color: '#d4af37', fontSize: 20, fontWeight: 'bold' },
+  statLabel:   { color: '#a8d5b5', fontSize: 10, marginTop: 2 },
   statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: 4 },
+
+  // ── Tab bar ─────────────────────────────────────────────────
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  tabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 2.5,
+    borderBottomColor: 'transparent',
+  },
+  tabBtnActive: {
+    borderBottomColor: '#1a472a',
+  },
+  tabBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tabBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#aaa',
+  },
+  tabBtnTextActive: {
+    color: '#1a472a',
+  },
+  tabNewBadge: {
+    backgroundColor: '#d4af37',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  tabNewBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#1a472a',
+    letterSpacing: 0.5,
+  },
+
+  // ── Rounds list ──────────────────────────────────────────────
   chartCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -393,8 +627,10 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   chartTitle: { fontSize: 15, fontWeight: '700', color: '#1a472a', marginBottom: 4 },
-  chartHint: { fontSize: 11, color: '#bbb', textAlign: 'center', marginTop: 4 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#555', marginBottom: 8, marginTop: 4 },
+  chartHint:  { fontSize: 11, color: '#bbb', textAlign: 'center', marginTop: 4 },
+  sectionTitle: {
+    fontSize: 15, fontWeight: '700', color: '#555', marginBottom: 8, marginTop: 4,
+  },
   card: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -407,10 +643,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  cardLeft: { flex: 1 },
-  cardCourse: { fontSize: 15, fontWeight: '700', color: '#1a472a' },
+  cardLeft:     { flex: 1 },
+  cardCourse:   { fontSize: 15, fontWeight: '700', color: '#1a472a' },
   cardLocation: { fontSize: 12, color: '#888', marginTop: 2 },
-  cardDate: { fontSize: 12, color: '#aaa', marginTop: 4 },
+  cardDate:     { fontSize: 12, color: '#aaa', marginTop: 4 },
   aiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -423,14 +659,19 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   aiBadgeText: { fontSize: 10, color: '#1a472a', fontWeight: '600' },
-  cardRight: { alignItems: 'flex-end', justifyContent: 'center', marginLeft: 12 },
-  cardScore: { fontSize: 28, fontWeight: 'bold' },
-  cardPar: { fontSize: 14, fontWeight: '600', marginTop: 2 },
-  cardPutts: { fontSize: 11, color: '#aaa', marginTop: 4 },
+  cardRight:   { alignItems: 'flex-end', justifyContent: 'center', marginLeft: 12 },
+  cardScore:   { fontSize: 28, fontWeight: 'bold' },
+  cardPar:     { fontSize: 14, fontWeight: '600', marginTop: 2 },
+  cardPutts:   { fontSize: 11, color: '#aaa', marginTop: 4 },
+
   emptyContainer: { alignItems: 'center', paddingTop: 60 },
-  emptyEmoji: { fontSize: 56, marginBottom: 12 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  emptySub: { fontSize: 14, color: '#888', marginTop: 8, textAlign: 'center', paddingHorizontal: 32 },
+  emptyEmoji:     { fontSize: 56, marginBottom: 12 },
+  emptyTitle:     { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  emptySub:       {
+    fontSize: 14, color: '#888', marginTop: 8, textAlign: 'center', paddingHorizontal: 32,
+  },
+
+  // Trouble Insights card
   insightCard: {
     backgroundColor: '#fff',
     borderRadius: 14,
@@ -448,9 +689,9 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
-  insightIcon: { fontSize: 20 },
-  insightTitle: { fontSize: 15, fontWeight: '700', color: '#1a472a' },
-  insightSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  insightIcon:    { fontSize: 20 },
+  insightTitle:   { fontSize: 15, fontWeight: '700', color: '#1a472a' },
+  insightSub:     { fontSize: 12, color: '#888', marginTop: 2 },
   insightChevron: { fontSize: 12, color: '#aaa' },
   insightStats: {
     flexDirection: 'row',
@@ -459,7 +700,7 @@ const styles = StyleSheet.create({
     gap: 16,
     flexWrap: 'wrap',
   },
-  insightStatItem: { alignItems: 'center', gap: 2 },
+  insightStatItem:  { alignItems: 'center', gap: 2 },
   insightStatEmoji: { fontSize: 20 },
   insightStatCount: { fontSize: 16, fontWeight: 'bold', color: '#f44336' },
   insightStatLabel: { fontSize: 11, color: '#888' },
@@ -472,7 +713,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   insightParLabel: { fontSize: 12, color: '#888', fontWeight: '600' },
-  insightParVal: { fontSize: 12, color: '#333', marginRight: 4 },
+  insightParVal:   { fontSize: 12, color: '#333', marginRight: 4 },
   insightAI: {
     backgroundColor: '#f0f7f2',
     margin: 12,
@@ -481,41 +722,116 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   insightAITitle: { fontSize: 13, fontWeight: '700', color: '#1a472a', marginBottom: 8 },
-  insightAIText: { fontSize: 13, color: '#333', lineHeight: 20 },
-  premiumLock: {
-    margin: 12,
-    marginTop: 4,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#ffd54f',
-    backgroundColor: '#fffde7',
-  },
-  premiumLockContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 14,
+  insightAIText:  { fontSize: 13, color: '#333', lineHeight: 20 },
+
+  // ── Diagnosis tab ────────────────────────────────────────────
+  diagScroll:        { flex: 1 },
+  diagScrollContent: { padding: 16, paddingBottom: 48 },
+
+  diagLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
     gap: 12,
   },
-  premiumLockIcon: { fontSize: 22, marginTop: 2 },
-  premiumLockTitle: { fontSize: 13, fontWeight: '700', color: '#5d4037', marginBottom: 4 },
-  premiumLockSub: { fontSize: 12, color: '#795548', lineHeight: 18 },
-  premiumLockBtn: {
+  diagLoadingTitle: { fontSize: 17, fontWeight: '700', color: '#1a472a', textAlign: 'center' },
+  diagLoadingSub:   { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 20 },
+
+  diagError: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    gap: 12,
+  },
+  diagErrorEmoji: { fontSize: 40 },
+  diagErrorText:  { fontSize: 14, color: '#555', textAlign: 'center', lineHeight: 22 },
+  retryBtn: {
+    marginTop: 8,
+    backgroundColor: '#1a472a',
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+
+  diagBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    gap: 12,
+  },
+  diagBannerEmoji:  { fontSize: 32 },
+  diagBannerTitle:  { fontSize: 16, fontWeight: 'bold', color: '#fff' },
+  diagBannerSub:    { fontSize: 12, color: '#a8d5b5', marginTop: 2 },
+
+  diagSection: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  diagSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  diagSectionIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  diagSectionIcon:    { fontSize: 18 },
+  diagSectionTitle:   { fontSize: 15, fontWeight: '800' },
+  diagSectionContent: { fontSize: 13.5, color: '#333', lineHeight: 22 },
+
+  // Coach CTA
+  coachCTA: {
+    backgroundColor: '#1a472a',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 4,
+    marginBottom: 12,
+    gap: 8,
+  },
+  coachCTATitle: { fontSize: 17, fontWeight: 'bold', color: '#fff' },
+  coachCTASub:   { fontSize: 13, color: '#a8d5b5', lineHeight: 19 },
+  coachCTABtn: {
+    backgroundColor: '#d4af37',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  coachCTABtnText: { fontSize: 15, fontWeight: 'bold', color: '#1a472a' },
+
+  refreshDiagBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff8e1',
-    borderTopWidth: 1,
-    borderTopColor: '#ffe082',
+    gap: 6,
     paddingVertical: 12,
-    gap: 10,
   },
-  premiumLockBtnText: { fontSize: 13, fontWeight: '700', color: '#5d4037' },
-  comingSoonBadge: {
-    backgroundColor: '#d4af37',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  refreshDiagText: { fontSize: 12, color: '#888' },
+  diagDisclaimer:  {
+    fontSize: 11,
+    color: '#bbb',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    lineHeight: 17,
+    marginBottom: 8,
   },
-  comingSoonBadgeText: { fontSize: 10, fontWeight: 'bold', color: '#1a472a' },
 });
