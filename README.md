@@ -162,7 +162,7 @@ This is a classic **fake door test**. If zero users opt in, the AI-to-coach refe
 
 **Validation stage:**
 - 🟢 Shipped end-to-end (auth → scorecard → AI diagnosis → social layer)
-- 🟢 Early beta with a small group of testers from my Orange County golf network
+- 🟢 Early beta with testers from my personal golf network — friends and people I've played with at Orange County courses; actively recruiting more through the coach waitlist signal
 - 🟡 Coach waitlist live, collecting signals for the referral model
 
 This is at the "real thing, real users, real data" stage — but still early. The ROADMAP below is honest about what's next.
