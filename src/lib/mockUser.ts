@@ -182,6 +182,73 @@ export const MOCK_DIAGNOSIS_REPORT: DiagnosisReport = {
   raw: '',
 };
 
+// Mock practice feed entries — 用真实姓名 / 球场 / 练习内容
+export const MOCK_PRACTICE_LOGS = [
+  {
+    id: 'mock-log-1',
+    user_id: MOCK_USER_ID,
+    created_at: daysAgo(2),
+    practice_tags: ['Putting'],
+    duration_minutes: 45,
+    ball_count: null,
+    note: 'Worked on 10ft putting drills. Made 8/10 consistently.',
+    photo_url: null,
+    location: 'Pebble Beach',
+    reactions: [
+      { id: 'r1a', user_id: 'friend-2', type: 'like', content: null },
+      { id: 'r1b', user_id: 'friend-3', type: 'like', content: null },
+    ],
+    profiles: { id: MOCK_USER_ID, username: 'Alan', avatar_url: null },
+  },
+  {
+    id: 'mock-log-2',
+    user_id: 'friend-1',
+    created_at: daysAgo(5),
+    practice_tags: ['Chipping'],
+    duration_minutes: 60,
+    ball_count: 50,
+    note: 'Short game practice at the range. Focused on 50yd wedge.',
+    photo_url: null,
+    location: 'Torrey Pines South',
+    reactions: [
+      { id: 'r2a', user_id: MOCK_USER_ID, type: 'like', content: null },
+    ],
+    profiles: { id: 'friend-1', username: 'Marcus Chen', avatar_url: null },
+  },
+  {
+    id: 'mock-log-3',
+    user_id: 'friend-2',
+    created_at: daysAgo(8),
+    practice_tags: ['Driver'],
+    duration_minutes: 90,
+    ball_count: 100,
+    note: 'Driving range session. Working on keeping the ball flight lower.',
+    photo_url: null,
+    location: 'Pinehurst No. 2',
+    reactions: [
+      { id: 'r3a', user_id: 'friend-1', type: 'like', content: null },
+      { id: 'r3b', user_id: MOCK_USER_ID, type: 'like', content: null },
+      { id: 'r3c', user_id: 'friend-3', type: 'like', content: null },
+    ],
+    profiles: { id: 'friend-2', username: 'Emma Rodriguez', avatar_url: null },
+  },
+  {
+    id: 'mock-log-4',
+    user_id: 'friend-3',
+    created_at: daysAgo(12),
+    practice_tags: ['Bunker', 'Iron Play'],
+    duration_minutes: 75,
+    ball_count: null,
+    note: 'Bunker drills today. Improved sand saves significantly.',
+    photo_url: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?w=800&q=70',
+    location: 'Bethpage Black',
+    reactions: [
+      { id: 'r4a', user_id: MOCK_USER_ID, type: 'like', content: null },
+    ],
+    profiles: { id: 'friend-3', username: 'David Park', avatar_url: null },
+  },
+];
+
 export const MOCK_USER_STATS: UserStats = {
   user_id: MOCK_USER_ID,
   current_streak: 5,
