@@ -1,47 +1,37 @@
 // ============================================================
-// 设置页 — 个人资料编辑 + Premium Coming Soon
+// 设置页 — 个人资料编辑 + Premium Coming Soon + 退出登录
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  SafeAreaView, ScrollView, ActivityIndicator,
+  View, Text, StyleSheet, TextInput,
+  SafeAreaView, ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import { isDevMockActive, MOCK_PROFILE } from '../../lib/mockUser';
 import { RootStackParamList } from '../../navigation';
+import {
+  Card, ListItem, LoadingSpinner, PrimaryButton, ScreenHeader, SecondaryButton,
+} from '../../components';
+import { colors, radius, spacing, typography } from '../../theme';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-const AVATAR_EMOJIS = [
-  '🏌️','⛳','🦅','🏆','🔥','🎯','💪','🌟','🤝','🍀',
-  '🥇','🐯','🦁','🚀','🌿','⚡','🏅','🎳','🎪','😎',
-];
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const PREMIUM_FEATURES = [
-  {
-    icon: '📊',
-    title: 'Strokes Gained Analysis',
-    desc: 'See exactly where you\'re losing or gaining strokes vs. scratch golfers.',
-  },
-  {
-    icon: '🎓',
-    title: 'Coach Match',
-    desc: 'Get matched with a PGA coach based on your specific weaknesses.',
-  },
-  {
-    icon: '🏷️',
-    title: 'Equipment Recommendations',
-    desc: 'AI-powered club & ball recommendations based on your swing data.',
-  },
-  {
-    icon: '📈',
-    title: 'Advanced Trend Reports',
-    desc: 'Monthly PDF reports with deep dives into your improvement trajectory.',
-  },
+const PREMIUM_FEATURES: { icon: IconName; title: string; desc: string }[] = [
+  { icon: 'stats-chart-outline',   title: 'Strokes Gained Analysis',
+    desc: "See exactly where you're losing or gaining strokes vs. scratch golfers." },
+  { icon: 'school-outline',        title: 'Coach Match',
+    desc: 'Get matched with a PGA coach based on your specific weaknesses.' },
+  { icon: 'golf-outline',          title: 'Equipment Recommendations',
+    desc: 'AI-powered club & ball recommendations based on your swing data.' },
+  { icon: 'document-text-outline', title: 'Advanced Trend Reports',
+    desc: 'Monthly PDF reports with deep dives into your improvement trajectory.' },
 ];
 
 export default function SettingsScreen() {
@@ -61,6 +51,14 @@ export default function SettingsScreen() {
   }, [user]);
 
   const loadProfile = async () => {
+    if (isDevMockActive()) {
+      setUsername(MOCK_PROFILE.username);
+      setAvatar(MOCK_PROFILE.avatar_url);
+      setYears('8');
+      setLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from('profiles')
       .select('username, avatar_url, years_playing')
@@ -81,12 +79,21 @@ export default function SettingsScreen() {
     if (!username.trim()) { setError('Username cannot be empty.'); return; }
 
     setSaving(true);
+
+    if (isDevMockActive()) {
+      await new Promise(r => setTimeout(r, 400));
+      setSaving(false);
+      setSaveMsg('Profile saved');
+      setTimeout(() => setSaveMsg(''), 3000);
+      return;
+    }
+
     const { error: err } = await supabase
       .from('profiles')
       .upsert({
-        id:           user!.id,
-        username:     username.trim(),
-        avatar_url:   avatarEmoji,
+        id:            user!.id,
+        username:      username.trim(),
+        avatar_url:    avatarEmoji,
         years_playing: yearsPlaying ? parseInt(yearsPlaying, 10) : null,
       });
 
@@ -94,7 +101,7 @@ export default function SettingsScreen() {
     if (err) {
       setError('Failed to save. Please try again.');
     } else {
-      setSaveMsg('✓ Profile saved!');
+      setSaveMsg('Profile saved');
       setTimeout(() => setSaveMsg(''), 3000);
     }
   };
@@ -102,308 +109,372 @@ export default function SettingsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ActivityIndicator size="large" color="#1a472a" style={{ marginTop: 60 }} />
+        <ScreenHeader title="Settings" onBack={() => navigation.goBack()} />
+        <LoadingSpinner fullscreen />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={{ width: 38 }} />
-      </View>
+      <ScreenHeader title="Settings" onBack={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={styles.content}>
-
-        {/* ── Profile Section ──────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Profile</Text>
-        <View style={styles.card}>
-          {/* Avatar emoji picker */}
-          <Text style={styles.fieldLabel}>Avatar</Text>
-          <View style={styles.avatarGrid}>
-            {AVATAR_EMOJIS.map(e => (
-              <TouchableOpacity
-                key={e}
-                style={[styles.avatarBtn, avatarEmoji === e && styles.avatarBtnActive]}
-                onPress={() => setAvatar(e)}
-              >
-                <Text style={styles.avatarEmoji}>{e}</Text>
-              </TouchableOpacity>
-            ))}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Profile ─────────────────────────────────── */}
+        <SectionTitle>Profile</SectionTitle>
+        <Card style={styles.card}>
+          <View
+            style={styles.letterAvatar}
+            accessible
+            accessibilityLabel={`Avatar for ${username || 'user'}`}
+          >
+            <Text style={styles.letterAvatarText}>
+              {(username.trim()[0] ?? '?').toUpperCase()}
+            </Text>
           </View>
 
-          {/* Username */}
           <Text style={styles.fieldLabel}>Username</Text>
           <TextInput
             style={styles.input}
             value={username}
             onChangeText={t => { setUsername(t); setError(''); setSaveMsg(''); }}
             placeholder="Your username"
-            placeholderTextColor="#aaa"
+            placeholderTextColor={colors.text.hint}
             autoCapitalize="none"
             maxLength={30}
+            accessibilityLabel="Username"
+            accessibilityHint="Displayed on leaderboards and practice feed"
           />
 
-          {/* Years playing */}
           <Text style={styles.fieldLabel}>Years Playing Golf</Text>
           <TextInput
             style={styles.input}
             value={yearsPlaying}
             onChangeText={t => { setYears(t.replace(/[^0-9]/g, '')); setSaveMsg(''); }}
             placeholder="e.g. 5"
-            placeholderTextColor="#aaa"
+            placeholderTextColor={colors.text.hint}
             keyboardType="number-pad"
             maxLength={2}
+            accessibilityLabel="Years playing golf"
           />
 
-          {/* Errors / success */}
           {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️  {error}</Text>
+            <View style={styles.errorBox} accessibilityLiveRegion="polite">
+              <Text style={styles.errorText}>⚠ {error}</Text>
             </View>
           ) : null}
           {saveMsg ? (
-            <Text style={styles.saveMsg}>{saveMsg}</Text>
+            <Text style={styles.saveMsg} accessibilityLiveRegion="polite">
+              ✓ {saveMsg}
+            </Text>
           ) : null}
 
-          <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            {saving
-              ? <ActivityIndicator color="#1a472a" />
-              : <Text style={styles.saveBtnText}>Save Profile</Text>
-            }
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Account Section ───────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Account</Text>
-        <View style={styles.card}>
-          <View style={styles.accountRow}>
-            <Ionicons name="mail-outline" size={18} color="#888" />
-            <Text style={styles.accountEmail}>{user?.email}</Text>
+          <View style={styles.saveWrap}>
+            <PrimaryButton
+              label="Save Profile"
+              onPress={handleSave}
+              loading={saving}
+              accessibilityHint="Updates your profile"
+            />
           </View>
-          <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
-            <Ionicons name="log-out-outline" size={18} color="#e53935" />
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
+        </Card>
+
+        {/* ── Account ─────────────────────────────────── */}
+        <SectionTitle>Account</SectionTitle>
+        <Card style={styles.listCard}>
+          <ListItem
+            title={user?.email ?? 'Signed in'}
+            subtitle="Email"
+            leftIcon={
+              <Ionicons name="mail-outline" size={18} color={colors.text.secondary} />
+            }
+            showArrow={false}
+            divider={false}
+          />
+        </Card>
+        <View style={styles.signOutWrap}>
+          <SecondaryButton
+            label="Sign Out"
+            onPress={signOut}
+            accessibilityHint="Logs you out of your account"
+          />
         </View>
 
-        {/* ── Premium Section ───────────────────────────────── */}
-        <View style={styles.premiumHeader}>
-          <Text style={styles.sectionTitle}>Premium</Text>
-          <View style={styles.comingSoonPill}>
+        {/* ── Premium ─────────────────────────────────── */}
+        <View style={styles.premiumHeaderRow}>
+          <SectionTitle style={styles.premiumSectionTitle}>Premium</SectionTitle>
+          <View style={styles.comingSoonPill} accessible={false}>
             <Text style={styles.comingSoonText}>Coming Soon</Text>
           </View>
         </View>
-        <View style={styles.premiumBanner}>
-          <Text style={styles.premiumBannerTitle}>⭐ Everyone 72 Premium</Text>
+
+        <Card style={styles.premiumBanner}>
+          <Text style={styles.premiumBannerTitle} accessibilityRole="header">
+            Everyone 72 Premium
+          </Text>
           <Text style={styles.premiumBannerSub}>
             Unlock advanced analytics, coach matching, and personalized insights to level up your game.
           </Text>
+        </Card>
+
+        <Card style={styles.premiumListCard}>
+          {PREMIUM_FEATURES.map((f, i) => (
+            <PremiumRow
+              key={f.title}
+              icon={f.icon}
+              title={f.title}
+              desc={f.desc}
+              last={i === PREMIUM_FEATURES.length - 1}
+            />
+          ))}
+        </Card>
+
+        <View style={styles.notifyWrap}>
+          <SecondaryButton
+            label="Notify me when Premium launches"
+            onPress={() => { /* fake-door: waitlist */ }}
+            accessibilityHint="Adds you to the Premium launch waitlist"
+          />
         </View>
 
-        {PREMIUM_FEATURES.map(f => (
-          <View key={f.title} style={styles.premiumCard}>
-            <View style={styles.lockOverlay}>
-              <Text style={styles.lockIcon}>🔒</Text>
-            </View>
-            <Text style={styles.premiumIcon}>{f.icon}</Text>
-            <View style={styles.premiumInfo}>
-              <Text style={styles.premiumTitle}>{f.title}</Text>
-              <Text style={styles.premiumDesc}>{f.desc}</Text>
-            </View>
-          </View>
-        ))}
+        {/* ── Legal ───────────────────────────────────── */}
+        <Card style={styles.listCard}>
+          <ListItem
+            title="Privacy Policy"
+            onPress={() => navigation.navigate('PrivacyPolicy')}
+          />
+          <ListItem
+            title="Terms of Service"
+            onPress={() => navigation.navigate('Terms')}
+            divider={false}
+          />
+        </Card>
 
-        <TouchableOpacity style={styles.notifyBtn}>
-          <Text style={styles.notifyBtnText}>🔔 Notify Me When Premium Launches</Text>
-        </TouchableOpacity>
-
-        {/* Legal */}
-        <View style={styles.legalRow}>
-          <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy')}>
-            <Text style={styles.legalLink}>Privacy Policy</Text>
-          </TouchableOpacity>
-          <Text style={styles.legalSep}>·</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Terms')}>
-            <Text style={styles.legalLink}>Terms of Service</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.version}>Everyone 72  ·  v1.0.0</Text>
+        <Text style={styles.version} accessibilityLabel="Everyone 72 version 1.0.0">
+          Everyone 72 · v1.0.0
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ── Subcomponents ─────────────────────────────────────────────
+
+function SectionTitle({
+  children, style,
+}: { children: React.ReactNode; style?: any }) {
+  return (
+    <Text
+      style={[styles.sectionTitle, style]}
+      accessibilityRole="header"
+    >
+      {children}
+    </Text>
+  );
+}
+
+function PremiumRow({
+  icon, title, desc, last,
+}: { icon: IconName; title: string; desc: string; last: boolean }) {
+  return (
+    <View
+      style={[styles.premiumRow, !last && styles.premiumDivider]}
+      accessible
+      accessibilityLabel={`${title} (locked). ${desc}`}
+    >
+      <View style={styles.premiumIconWrap} accessible={false}>
+        <Ionicons
+          name={icon}
+          size={20}
+          color={colors.text.secondary}
+          accessible={false}
+        />
+      </View>
+      <View style={styles.premiumInfo}>
+        <Text style={styles.premiumTitle}>{title}</Text>
+        <Text style={styles.premiumDesc}>{desc}</Text>
+      </View>
+      <Ionicons
+        name="lock-closed-outline"
+        size={16}
+        color={colors.text.hint}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f5f5f0' },
-  header: {
-    backgroundColor: '#1a472a',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 8,
+  safe: { flex: 1, backgroundColor: colors.washi },
+  content: {
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing['2xl'],
   },
-  backBtn: { width: 38, padding: 4 },
-  headerTitle: { flex: 1, color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
-  content: { padding: 20, paddingBottom: 60 },
+
   sectionTitle: {
-    fontSize: 13,
+    fontSize: typography.xs,
     fontWeight: '700',
-    color: '#888',
+    color: colors.text.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginTop: 20,
-    marginBottom: 10,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
+
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
-    gap: 10,
+    gap: spacing.sm,
   },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 2 },
-  avatarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 4,
+  listCard: {
+    padding: 0,
+    overflow: 'hidden',
   },
-  avatarBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#f5f5f0',
-    justifyContent: 'center',
+
+  // Fields
+  fieldLabel: {
+    fontSize: typography.xs,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+    marginBottom: 2,
+    letterSpacing: 0.3,
+  },
+  letterAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.koke,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  avatarBtnActive: {
-    borderColor: '#1a472a',
-    backgroundColor: '#e8f5e9',
+  letterAvatarText: {
+    color: colors.shiro,
+    fontSize: typography.xl,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
-  avatarEmoji: { fontSize: 22 },
+  pressed: { opacity: 0.6 },
+
   input: {
-    backgroundColor: '#f5f5f0',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    backgroundColor: colors.washi,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: typography.base,
+    color: colors.text.primary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.usuzumi,
   },
+
   errorBox: {
-    backgroundColor: 'rgba(220,53,69,0.1)',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(220,53,69,0.25)',
+    backgroundColor: colors.washi,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.aka,
   },
-  errorText: { color: '#c62828', fontSize: 13 },
-  saveMsg: { color: '#2e7d32', fontSize: 14, fontWeight: '600', textAlign: 'center' },
-  saveBtn: {
-    backgroundColor: '#1a472a',
-    borderRadius: 10,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 4,
+  errorText: {
+    color: colors.aka,
+    fontSize: typography.sm,
   },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  accountRow: {
+  saveMsg: {
+    color: colors.koke,
+    fontSize: typography.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  saveWrap: { marginTop: spacing.sm },
+
+  signOutWrap: {
+    marginTop: spacing.md,
+  },
+
+  // Premium
+  premiumHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 4,
+    gap: spacing.sm,
   },
-  accountEmail: { fontSize: 14, color: '#555' },
-  signOutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-  },
-  signOutText: { color: '#e53935', fontSize: 15, fontWeight: '600' },
-  premiumHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 20,
-    marginBottom: 10,
-  },
+  premiumSectionTitle: { marginBottom: spacing.sm },
   comingSoonPill: {
-    backgroundColor: '#d4af37',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.kincha,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
-  comingSoonText: { fontSize: 10, fontWeight: 'bold', color: '#1a472a' },
+  comingSoonText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.kincha,
+    letterSpacing: 0.5,
+  },
+
   premiumBanner: {
-    backgroundColor: '#1a472a',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.kincha,
+    marginBottom: spacing.md,
   },
-  premiumBannerTitle: { color: '#d4af37', fontSize: 17, fontWeight: 'bold', marginBottom: 6 },
-  premiumBannerSub: { color: '#a8d5b5', fontSize: 13, lineHeight: 20 },
-  premiumCard: {
+  premiumBannerTitle: {
+    fontSize: typography.base,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  premiumBannerSub: {
+    fontSize: typography.sm,
+    color: colors.text.secondary,
+    lineHeight: typography.sm * 1.5,
+  },
+
+  premiumListCard: {
+    padding: 0,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  premiumRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    gap: 14,
-    opacity: 0.8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    gap: spacing.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
   },
-  lockOverlay: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
+  premiumDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.usuzumi,
   },
-  lockIcon: { fontSize: 16 },
-  premiumIcon: { fontSize: 30 },
-  premiumInfo: { flex: 1 },
-  premiumTitle: { fontSize: 14, fontWeight: '700', color: '#333' },
-  premiumDesc: { fontSize: 12, color: '#888', marginTop: 3, lineHeight: 18 },
-  notifyBtn: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 12,
-    padding: 14,
+  premiumIconWrap: {
+    width: 32,
     alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#ffd54f',
-  },
-  notifyBtnText: { color: '#795548', fontWeight: '600', fontSize: 14 },
-  legalRow: {
-    flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
   },
-  legalLink: { color: '#aaa', fontSize: 12, textDecorationLine: 'underline' },
-  legalSep: { color: '#ccc', fontSize: 12 },
-  version: { textAlign: 'center', fontSize: 11, color: '#ccc' },
+  premiumInfo: { flex: 1 },
+  premiumTitle: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  premiumDesc: {
+    fontSize: typography.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+    lineHeight: typography.xs * 1.6,
+  },
+
+  notifyWrap: { marginTop: spacing.xs, marginBottom: spacing.md },
+
+  version: {
+    textAlign: 'center',
+    fontSize: typography.xs,
+    color: colors.text.hint,
+    marginTop: spacing.base,
+    letterSpacing: 0.3,
+  },
 });

@@ -21,9 +21,10 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 
 import { useAuth } from '../hooks/useAuth';
+import { colors } from '../theme';
 
 // Auth
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -97,18 +98,26 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#1a472a',
-        tabBarInactiveTintColor: '#999',
-        tabBarStyle: { paddingBottom: 4, height: 56 },
-        tabBarIcon: ({ focused, color, size }) => {
-          const icons: Record<string, [string, string]> = {
-            Home:     ['home',     'home-outline'],
-            Practice: ['barbell',  'barbell-outline'],
-            Crew:     ['people',   'people-outline'],
-            History:  ['time',     'time-outline'],
+        tabBarActiveTintColor: colors.koke,
+        tabBarInactiveTintColor: colors.text.hint,
+        tabBarStyle: {
+          backgroundColor: colors.shiro,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.usuzumi,
+          paddingBottom: 6,
+          paddingTop: 4,
+          height: 60,
+        },
+        tabBarLabelStyle: { fontSize: 11, letterSpacing: 0.3 },
+        tabBarIcon: ({ color, size }) => {
+          const icons: Record<string, string> = {
+            Home:     'home-outline',
+            Practice: 'golf-outline',
+            Crew:     'people-outline',
+            History:  'time-outline',
           };
-          const [active, inactive] = icons[route.name] ?? ['ellipse', 'ellipse-outline'];
-          return <Ionicons name={(focused ? active : inactive) as any} size={size} color={color} />;
+          const name = icons[route.name] ?? 'ellipse-outline';
+          return <Ionicons name={name as any} size={size} color={color} />;
         },
       })}
     >
@@ -184,8 +193,8 @@ export default function Navigation() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a472a' }}>
-        <ActivityIndicator size="large" color="#fff" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.washi }}>
+        <ActivityIndicator size="large" color={colors.koke} />
       </View>
     );
   }

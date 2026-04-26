@@ -1,41 +1,55 @@
 // ============================================================
-// Crew 列表 — 我的球友小组 + 创建 / 加入
+// Crew 列表 — Golf Journal 设计语言（serif 标题 + 暖米底 + outline）
 // ============================================================
 
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, TextInput, Alert,
+  View, Text, StyleSheet, FlatList, Pressable,
+  SafeAreaView, TextInput,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Ellipse, Line } from 'react-native-svg';
+
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import { isDevMockActive } from '../../lib/mockUser';
+import { LoadingSpinner } from '../../components';
 import { Crew } from '../../types';
 import { RootStackParamList } from '../../navigation';
+import { colors, radius, spacing, typography, fontFamily } from '../../theme';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
+
+// 空状态插画用色（仅本屏，与 HomeScreen 水彩 SVG 一致）
+const GRASS_LIGHT = '#D8E8D0';
+const GRASS_MID   = '#C8DFC8';
+const TREE_GREEN  = '#A8C8A0';
 
 export default function CrewListScreen() {
   const navigation = useNavigation<NavProp>();
   const { user } = useAuth();
 
-  const [crews, setCrews]             = useState<Crew[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [inviteCode, setInviteCode]   = useState('');
-  const [joining, setJoining]         = useState(false);
-  const [joinError, setJoinError]     = useState('');
+  const [crews, setCrews]           = useState<Crew[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [inviteCode, setInviteCode] = useState('');
+  const [joining, setJoining]       = useState(false);
+  const [joinError, setJoinError]   = useState('');
 
   useFocusEffect(
-    useCallback(() => { fetchCrews(); }, [user])
+    useCallback(() => { fetchCrews(); }, [user]),
   );
 
   const fetchCrews = async () => {
+    if (isDevMockActive()) {
+      setCrews([]);
+      setLoading(false);
+      return;
+    }
     if (!user) return;
     setLoading(true);
 
-    // Fetch all crews the user belongs to, with member count
     const { data: memberRows } = await supabase
       .from('crew_members')
       .select('crew_id')
@@ -57,7 +71,6 @@ export default function CrewListScreen() {
 
     if (!crewData) { setLoading(false); return; }
 
-    // Fetch member counts per crew
     const { data: countData } = await supabase
       .from('crew_members')
       .select('crew_id')
@@ -77,7 +90,13 @@ export default function CrewListScreen() {
     setJoinError('');
     setJoining(true);
 
-    // Look up crew by invite code
+    if (isDevMockActive()) {
+      await new Promise(r => setTimeout(r, 400));
+      setJoinError('Demo mode: invite codes disabled.');
+      setJoining(false);
+      return;
+    }
+
     const { data: crew } = await supabase
       .from('crews')
       .select('id, name, max_members')
@@ -90,7 +109,6 @@ export default function CrewListScreen() {
       return;
     }
 
-    // Check member count
     const { count } = await supabase
       .from('crew_members')
       .select('id', { count: 'exact', head: true })
@@ -102,7 +120,6 @@ export default function CrewListScreen() {
       return;
     }
 
-    // Check not already a member
     const { data: existing } = await supabase
       .from('crew_members')
       .select('id')
@@ -131,223 +148,442 @@ export default function CrewListScreen() {
   };
 
   const renderCrew = ({ item }: { item: Crew }) => (
-    <TouchableOpacity
-      style={styles.crewCard}
+    <Pressable
       onPress={() => navigation.navigate('CrewDetail', { crewId: item.id })}
+      accessibilityRole="button"
+      accessibilityLabel={
+        `${item.name}, ${item.member_count}/${item.max_members} members` +
+        (item.creator_id === user?.id ? ', owner' : '')
+      }
+      style={({ pressed }) => [styles.crewCard, pressed && styles.pressedRow]}
     >
-      <Text style={styles.crewEmoji}>{item.emoji}</Text>
+      <Text style={styles.crewEmoji} accessible={false}>{item.emoji}</Text>
       <View style={styles.crewInfo}>
-        <Text style={styles.crewName}>{item.name}</Text>
+        <Text style={styles.crewName} numberOfLines={1}>{item.name}</Text>
         {item.description ? (
           <Text style={styles.crewDesc} numberOfLines={1}>{item.description}</Text>
         ) : null}
         <Text style={styles.crewMeta}>
-          👥 {item.member_count}/{item.max_members} members
-          {item.creator_id === user?.id ? '  ·  Owner' : ''}
+          {item.member_count}/{item.max_members} members
+          {item.creator_id === user?.id ? ' · Owner' : ''}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#ccc" />
-    </TouchableOpacity>
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={colors.text.hint}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      />
+    </Pressable>
   );
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Header */}
+      <FlatList
+        data={crews}
+        keyExtractor={i => i.id}
+        renderItem={renderCrew}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <CrewHeader
+            inviteCode={inviteCode}
+            joining={joining}
+            joinError={joinError}
+            onChangeInvite={t => { setInviteCode(t); setJoinError(''); }}
+            onJoin={handleJoin}
+            onCreate={() => navigation.navigate('CreateCrew')}
+            onFriends={() => navigation.navigate('Friends')}
+            onLeaderboard={() => navigation.navigate('Leaderboard')}
+          />
+        }
+        ListEmptyComponent={
+          loading ? (
+            <LoadingSpinner style={styles.loaderWrap} />
+          ) : (
+            <EmptyCrewState onCreate={() => navigation.navigate('CreateCrew')} />
+          )
+        }
+      />
+    </SafeAreaView>
+  );
+}
+
+// ── Header (title + subtitle + outline New Crew button) ────────
+
+function CrewHeader({
+  inviteCode, joining, joinError,
+  onChangeInvite, onJoin, onCreate, onFriends, onLeaderboard,
+}: {
+  inviteCode: string;
+  joining: boolean;
+  joinError: string;
+  onChangeInvite: (t: string) => void;
+  onJoin: () => void;
+  onCreate: () => void;
+  onFriends: () => void;
+  onLeaderboard: () => void;
+}) {
+  return (
+    <>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Golf Crew</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle} accessibilityRole="header">Golf Crew</Text>
           <Text style={styles.headerSub}>Your golf squads</Text>
         </View>
-        <TouchableOpacity
-          style={styles.createBtn}
-          onPress={() => navigation.navigate('CreateCrew')}
+        <Pressable
+          onPress={onCreate}
+          accessibilityRole="button"
+          accessibilityLabel="Create new crew"
+          style={({ pressed }) => [styles.newCrewBtn, pressed && styles.pressed]}
         >
-          <Ionicons name="add" size={22} color="#1a472a" />
-          <Text style={styles.createBtnText}>New Crew</Text>
-        </TouchableOpacity>
+          <Ionicons name="add" size={16} color={colors.koke} accessible={false} />
+          <Text style={styles.newCrewText}>New Crew</Text>
+        </Pressable>
       </View>
 
-      {/* Join by invite code */}
-      <View style={styles.joinBox}>
+      <View style={styles.joinCard}>
         <Text style={styles.joinLabel}>Have an invite code?</Text>
         <View style={styles.joinRow}>
           <TextInput
             style={styles.joinInput}
             placeholder="Enter invite code"
-            placeholderTextColor="#aaa"
+            placeholderTextColor={colors.text.hint}
             value={inviteCode}
-            onChangeText={t => { setInviteCode(t); setJoinError(''); }}
+            onChangeText={onChangeInvite}
             autoCapitalize="characters"
+            accessibilityLabel="Invite code"
           />
-          <TouchableOpacity
-            style={[styles.joinBtn, joining && { opacity: 0.6 }]}
-            onPress={handleJoin}
+          <Pressable
+            onPress={onJoin}
             disabled={joining}
+            accessibilityRole="button"
+            accessibilityLabel="Join crew"
+            accessibilityState={{ disabled: joining, busy: joining }}
+            style={({ pressed }) => [
+              styles.joinBtn,
+              joining && styles.joinBtnDisabled,
+              pressed && !joining && styles.pressedJoin,
+            ]}
           >
-            {joining
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={styles.joinBtnText}>Join</Text>
-            }
-          </TouchableOpacity>
+            <Text style={styles.joinBtnText}>{joining ? '…' : 'Join'}</Text>
+          </Pressable>
         </View>
-        {joinError ? <Text style={styles.joinError}>⚠️ {joinError}</Text> : null}
+        {joinError ? (
+          <Text style={styles.joinError} accessibilityLiveRegion="polite">⚠ {joinError}</Text>
+        ) : null}
       </View>
 
-      {/* Quick links */}
-      <View style={styles.quickLinks}>
-        <TouchableOpacity
-          style={styles.quickLink}
-          onPress={() => navigation.navigate('Friends')}
-        >
-          <Ionicons name="person-add-outline" size={16} color="#1a472a" />
-          <Text style={styles.quickLinkText}>Friends</Text>
-        </TouchableOpacity>
-        <View style={styles.quickLinkDivider} />
-        <TouchableOpacity
-          style={styles.quickLink}
-          onPress={() => navigation.navigate('Leaderboard')}
-        >
-          <Ionicons name="trophy-outline" size={16} color="#1a472a" />
-          <Text style={styles.quickLinkText}>Leaderboard</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Crew list */}
-      {loading ? (
-        <ActivityIndicator size="large" color="#1a472a" style={{ marginTop: 40 }} />
-      ) : (
-        <FlatList
-          data={crews}
-          keyExtractor={i => i.id}
-          renderItem={renderCrew}
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>⛳</Text>
-              <Text style={styles.emptyTitle}>No crews yet</Text>
-              <Text style={styles.emptySub}>
-                Create a crew to compete and track progress with friends!
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={() => navigation.navigate('CreateCrew')}
-              >
-                <Text style={styles.emptyBtnText}>Create My First Crew</Text>
-              </TouchableOpacity>
-            </View>
-          }
+      <View style={styles.navStrip}>
+        <NavStripItem
+          icon="people-outline"
+          label="Friends"
+          onPress={onFriends}
         />
-      )}
-    </SafeAreaView>
+        <View style={styles.navStripDivider} accessible={false} />
+        <NavStripItem
+          icon="trophy-outline"
+          label="Leaderboard"
+          onPress={onLeaderboard}
+        />
+      </View>
+    </>
   );
 }
 
+function NavStripItem({
+  icon, label, onPress,
+}: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.navStripItem,
+        pressed && styles.navStripItemActive,
+      ]}
+    >
+      {({ pressed }) => (
+        <>
+          <Ionicons
+            name={icon}
+            size={16}
+            color={pressed ? colors.koke : colors.text.hint}
+            accessible={false}
+          />
+          <Text
+            style={[
+              styles.navStripLabel,
+              pressed && styles.navStripLabelActive,
+            ]}
+          >
+            {label}
+          </Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+// ── Empty State (with mini illustration) ─────────────────────
+
+function EmptyCrewState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <View style={styles.emptyState}>
+      <EmptyIllustration />
+      <Text style={styles.emptyTitle} accessibilityRole="header">No crews yet</Text>
+      <Text style={styles.emptySub}>
+        Create a crew to compete and track progress with friends!
+      </Text>
+      <Pressable
+        onPress={onCreate}
+        accessibilityRole="button"
+        accessibilityLabel="Create my first crew"
+        style={({ pressed }) => [styles.emptyBtn, pressed && styles.pressedEmpty]}
+      >
+        <Text style={styles.emptyBtnText}>Create My First Crew</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function EmptyIllustration() {
+  return (
+    <Svg width={140} height={120} viewBox="0 0 140 120" accessibilityElementsHidden>
+      {/* Clouds */}
+      <Ellipse cx={32}  cy={22} rx={10} ry={4} fill={GRASS_LIGHT} opacity={0.7} />
+      <Ellipse cx={108} cy={28} rx={11} ry={4} fill={GRASS_LIGHT} opacity={0.7} />
+      {/* Left leaf */}
+      <Path d="M 12 82 Q 0 75, 6 60 Q 20 65, 12 82 Z" fill={TREE_GREEN} opacity={0.65} />
+      {/* Right leaf */}
+      <Path d="M 128 80 Q 140 73, 134 58 Q 120 63, 128 80 Z" fill={TREE_GREEN} opacity={0.65} />
+      {/* Ground oval */}
+      <Ellipse cx={70} cy={98} rx={42} ry={12} fill={GRASS_MID} />
+      {/* Flag pole */}
+      <Line x1={70} y1={98} x2={70} y2={45} stroke={colors.text.secondary} strokeWidth={1.5} />
+      {/* Flag */}
+      <Path d="M 70 45 L 92 52 L 70 60 Z" fill={colors.kincha} opacity={0.9} />
+    </Svg>
+  );
+}
+
+// ── Styles ─────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f5f5f0' },
+  safe: { flex: 1, backgroundColor: colors.washi },
+
+  pressed: { opacity: 0.6 },
+  pressedRow: { backgroundColor: colors.washi },
+  pressedJoin: { opacity: 0.85 },
+  pressedEmpty: { opacity: 0.85 },
+
+  listContent: {
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+
+  // Header
   header: {
-    backgroundColor: '#1a472a',
-    padding: 20,
-    paddingTop: 8,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
   },
-  headerTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
-  headerSub: { color: '#a8d5b5', fontSize: 12, marginTop: 2 },
-  createBtn: {
+  headerText: { flex: 1 },
+  headerTitle: {
+    fontSize: typography.lg,
+    fontFamily: fontFamily.serif,
+    fontWeight: '600',
+    color: colors.text.primary,
+    letterSpacing: 0.2,
+  },
+  headerSub: {
+    fontSize: typography.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  newCrewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#d4af37',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    gap: 4,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.koke,
+    backgroundColor: 'transparent',
+    minHeight: 36,
   },
-  createBtnText: { color: '#1a472a', fontWeight: 'bold', fontSize: 14 },
-  joinBox: {
-    backgroundColor: '#fff',
-    margin: 16,
-    borderRadius: 14,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
+  newCrewText: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.koke,
+    letterSpacing: 0.2,
   },
-  joinLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 10 },
-  joinRow: { flexDirection: 'row', gap: 10 },
+
+  // Join card
+  joinCard: {
+    backgroundColor: colors.shiro,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.usuzumi,
+    padding: spacing.base,
+    marginBottom: spacing.md,
+  },
+  joinLabel: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  joinRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
   joinInput: {
     flex: 1,
-    backgroundColor: '#f5f5f0',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    letterSpacing: 2,
+    backgroundColor: colors.washi,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    fontSize: typography.base,
+    color: colors.text.primary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.usuzumi,
+    letterSpacing: 1.5,
   },
   joinBtn: {
-    backgroundColor: '#1a472a',
-    borderRadius: 10,
-    paddingHorizontal: 20,
+    backgroundColor: colors.koke,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    minHeight: 44,
     justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 76,
   },
-  joinBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  joinError: { color: '#e53935', fontSize: 13, marginTop: 8 },
+  joinBtnDisabled: { opacity: 0.55 },
+  joinBtnText: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.shiro,
+    letterSpacing: 0.3,
+  },
+  joinError: {
+    fontSize: typography.sm,
+    color: colors.aka,
+    marginTop: spacing.sm,
+  },
+
+  // Nav strip (Friends / Leaderboard)
+  navStrip: {
+    flexDirection: 'row',
+    backgroundColor: colors.shiro,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.usuzumi,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+  },
+  navStripItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    minHeight: 48,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  navStripItemActive: {
+    borderBottomColor: colors.koke,
+    backgroundColor: colors.washi,
+  },
+  navStripLabel: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.text.hint,
+    letterSpacing: 0.3,
+  },
+  navStripLabelActive: { color: colors.koke },
+  navStripDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.usuzumi,
+    marginVertical: spacing.sm,
+  },
+
+  // Crew card
   crewCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
-    gap: 14,
+    backgroundColor: colors.shiro,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.usuzumi,
+    padding: spacing.base,
+    marginBottom: spacing.md,
+    gap: spacing.md,
   },
-  crewEmoji: { fontSize: 36 },
+  crewEmoji: { fontSize: 32 },
   crewInfo: { flex: 1 },
-  crewName: { fontSize: 16, fontWeight: '700', color: '#1a472a' },
-  crewDesc: { fontSize: 13, color: '#666', marginTop: 2 },
-  crewMeta: { fontSize: 12, color: '#aaa', marginTop: 4 },
-  empty: {
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingHorizontal: 32,
+  crewName: {
+    fontSize: typography.base,
+    fontWeight: '600',
+    color: colors.text.primary,
   },
-  emptyEmoji: { fontSize: 56, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#1a472a', marginBottom: 8 },
-  emptySub: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  crewDesc: {
+    fontSize: typography.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  crewMeta: {
+    fontSize: typography.xs,
+    color: colors.text.hint,
+    marginTop: spacing.xs,
+    letterSpacing: 0.2,
+  },
+
+  // Empty state
+  loaderWrap: {
+    marginTop: spacing.xl,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: typography.xl,
+    fontFamily: fontFamily.serif,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    letterSpacing: -0.2,
+  },
+  emptySub: {
+    fontSize: typography.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: typography.sm * 1.6,
+    marginBottom: spacing.xl,
+    maxWidth: 320,
+  },
   emptyBtn: {
-    backgroundColor: '#1a472a',
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-  },
-  emptyBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  quickLinks: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 4,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  quickLink: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: colors.koke,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md + 2,
+    borderRadius: 28,
+    minHeight: 48,
     justifyContent: 'center',
-    paddingVertical: 11,
-    gap: 6,
   },
-  quickLinkText: { fontSize: 14, fontWeight: '600', color: '#1a472a' },
-  quickLinkDivider: { width: 1, backgroundColor: '#e0e0e0', marginVertical: 8 },
+  emptyBtnText: {
+    fontSize: typography.base,
+    fontWeight: '600',
+    color: colors.shiro,
+    letterSpacing: 0.3,
+  },
 });

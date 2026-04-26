@@ -6,6 +6,7 @@
 
 import { supabase } from './supabase';
 import { UserStats, Badge } from '../types';
+import { isDevMockActive, MOCK_USER_STATS } from './mockUser';
 
 // ── 勋章定义 ─────────────────────────────────────────────────
 export const BADGE_DEFS: { id: string; emoji: string; label: string; check: (s: UserStats) => boolean }[] = [
@@ -53,6 +54,7 @@ function daysBetween(a: string, b: string): number {
 
 // ── 获取用户统计 ──────────────────────────────────────────────
 export async function getUserStats(userId: string): Promise<UserStats | null> {
+  if (isDevMockActive()) return MOCK_USER_STATS;
   const { data, error } = await supabase
     .from('user_stats')
     .select('*')
