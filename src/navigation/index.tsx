@@ -49,6 +49,12 @@ import CrewDetailScreen from '../screens/crew/CrewDetailScreen';
 import CreateCrewScreen from '../screens/crew/CreateCrewScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 
+// Buddies(搭子/约局 · Phase 2-4)
+import EditProfileExtrasScreen from '../screens/buddies/EditProfileExtrasScreen';
+import OutingsListScreen from '../screens/buddies/OutingsListScreen';
+import CreateOutingScreen from '../screens/buddies/CreateOutingScreen';
+import OutingDetailScreen from '../screens/buddies/OutingDetailScreen';
+
 // Legal
 import PrivacyPolicyScreen from '../screens/legal/PrivacyPolicyScreen';
 import TermsScreen from '../screens/legal/TermsScreen';
@@ -151,6 +157,11 @@ function AuthenticatedStack() {
       <RootStack.Screen name="CrewDetail"      component={CrewDetailScreen} />
       <RootStack.Screen name="CreateCrew"      component={CreateCrewScreen} options={{ presentation: 'modal' }} />
       <RootStack.Screen name="Settings"        component={SettingsScreen} options={{ presentation: 'modal' }} />
+      {/* Buddies(搭子/约局) */}
+      <RootStack.Screen name="EditProfileExtras" component={EditProfileExtrasScreen} options={{ presentation: 'modal' }} />
+      <RootStack.Screen name="OutingsList"       component={OutingsListScreen} />
+      <RootStack.Screen name="CreateOuting"      component={CreateOutingScreen} options={{ presentation: 'modal' }} />
+      <RootStack.Screen name="OutingDetail"      component={OutingDetailScreen} />
       {/* Legal */}
       <RootStack.Screen name="PrivacyPolicy"   component={PrivacyPolicyScreen} />
       <RootStack.Screen name="Terms"           component={TermsScreen} />

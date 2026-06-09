@@ -306,6 +306,17 @@ export default function HomeScreen() {
           <Text style={styles.startBtnText}>Start New Round</Text>
         </Pressable>
 
+        {/* TEMP 搭子入口 — Phase 6 会换成正式的"搭子"底部 tab,这里仅为联调用 */}
+        <Pressable
+          onPress={() => navigation.navigate('OutingsList')}
+          accessibilityRole="button"
+          accessibilityLabel="找球友 / 约局"
+          style={({ pressed }) => [styles.buddiesTempBtn, pressed && { opacity: 0.85 }]}
+        >
+          <Ionicons name="people-outline" size={20} color={colors.koke} accessible={false} />
+          <Text style={styles.buddiesTempBtnText}>找球友 / 约局</Text>
+        </Pressable>
+
         {/* Practice Plan with watercolor illustration */}
         {activePlan ? (
           <View style={styles.planCard}>
@@ -723,6 +734,26 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     fontWeight: '600',
     color: colors.shiro,
+    letterSpacing: 0.3,
+  },
+
+  // TEMP 搭子入口（Phase 6 移除，改为正式底部 tab）
+  buddiesTempBtn: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.shiro,
+    borderWidth: 1,
+    borderColor: colors.koke,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  buddiesTempBtnText: {
+    fontSize: typography.base,
+    fontWeight: '600',
+    color: colors.koke,
     letterSpacing: 0.3,
   },
 
