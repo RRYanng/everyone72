@@ -83,6 +83,11 @@ export type RootStackParamList = {
   CrewDetail: { crewId: string };
   CreateCrew: undefined;
   Settings: undefined;
+  // Buddies(搭子/约局 · Phase 2-4)
+  EditProfileExtras: undefined;
+  OutingsList: undefined;
+  CreateOuting: undefined;
+  OutingDetail: { outingId: string };
   // Legal
   PrivacyPolicy: undefined;
   Terms: undefined;
