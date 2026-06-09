@@ -14,6 +14,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { Crew, CrewMember, CrewChallenge } from '../../types';
 import { RootStackParamList } from '../../navigation';
+import { CrewIcon } from './CrewIcon';
 
 type NavProp  = NativeStackNavigationProp<RootStackParamList>;
 type RouteT   = RouteProp<RootStackParamList, 'CrewDetail'>;
@@ -244,7 +245,7 @@ export default function CrewDetailScreen() {
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.crewEmoji}>{crew.emoji}</Text>
+          <CrewIcon value={crew.emoji} size={28} color="#fff" />
           <View>
             <Text style={styles.crewName}>{crew.name}</Text>
             <Text style={styles.crewMeta}>

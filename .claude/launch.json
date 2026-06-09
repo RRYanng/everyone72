@@ -5,7 +5,7 @@
       "name": "Everyone 72 (Expo Web)",
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": ["-c", "PATH=/Users/ruiyiyang/.nvm/versions/node/v24.14.0/bin:$PATH npx expo start --web --port 3000 --clear"],
-      "cwd": "/Users/ruiyiyang/Desktop/everyone72",
+      "cwd": "/Users/ruiyiyang/Desktop/  /自我迭代（Alan版）/项目/everyone72",
       "port": 3000
     }
   ]

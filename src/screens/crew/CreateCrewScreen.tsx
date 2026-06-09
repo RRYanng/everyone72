@@ -1,25 +1,37 @@
 // ============================================================
-// 创建 Crew — 名称 / Emoji / 描述
+// 创建 Crew — Golf Journal 设计语言
+// 名称 + Ionicon + 描述
 // ============================================================
 
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, ScrollView,
+  View, Text, StyleSheet, TextInput, Pressable,
+  SafeAreaView, ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import { isDevMockActive } from '../../lib/mockUser';
+import { PrimaryButton, ScreenHeader } from '../../components';
+import { colors, radius, spacing, typography, fontFamily } from '../../theme';
+import { CrewIcon } from './CrewIcon';
 import { RootStackParamList } from '../../navigation';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const EMOJI_OPTIONS = [
-  '⛳','🏌️','🏆','⚡','🔥','🎯','💪','🌟','🦅','🐯',
-  '🏅','🥇','🎳','🚀','🌿','🤝','🦁','🏋️','🎪','🍀',
+// 20 outline 图标，覆盖运动 / 成就 / 自然 / 几何
+const ICON_OPTIONS: IconName[] = [
+  'golf-outline',       'trophy-outline',     'flame-outline',     'flash-outline',
+  'star-outline',       'medal-outline',      'ribbon-outline',    'locate-outline',
+  'barbell-outline',    'people-outline',     'compass-outline',   'sparkles-outline',
+  'trending-up-outline','rocket-outline',     'leaf-outline',      'shield-outline',
+  'school-outline',     'map-outline',        'sunny-outline',     'heart-outline',
 ];
+
+const DEFAULT_ICON: IconName = 'golf-outline';
 
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -30,11 +42,11 @@ export default function CreateCrewScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
 
-  const [name, setName]         = useState('');
-  const [desc, setDesc]         = useState('');
-  const [emoji, setEmoji]       = useState('⛳');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [name, setName]       = useState('');
+  const [desc, setDesc]       = useState('');
+  const [icon, setIcon]       = useState<IconName>(DEFAULT_ICON);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
 
   const handleCreate = async () => {
     setError('');
@@ -43,10 +55,23 @@ export default function CreateCrewScreen() {
 
     setLoading(true);
 
-    // Generate unique invite code (retry if collision)
+    // DEV mock: 跳过 Supabase（mock user 不存在于真实 auth 表，FK 约束会失败）
+    if (isDevMockActive()) {
+      await new Promise(r => setTimeout(r, 400));
+      setLoading(false);
+      navigation.replace('CrewDetail', { crewId: `mock-crew-${Date.now()}` });
+      return;
+    }
+
+    if (!user) {
+      setError('You must be signed in to create a crew.');
+      setLoading(false);
+      return;
+    }
+
+    // 生成唯一邀请码（碰撞重试）
     let inviteCode = generateInviteCode();
-    let attempts = 0;
-    while (attempts < 5) {
+    for (let attempts = 0; attempts < 5; attempts++) {
       const { data: existing } = await supabase
         .from('crews')
         .select('id')
@@ -54,208 +79,252 @@ export default function CreateCrewScreen() {
         .maybeSingle();
       if (!existing) break;
       inviteCode = generateInviteCode();
-      attempts++;
     }
 
-    // Create crew
+    // 创建 crew
     const { data: crew, error: crewErr } = await supabase
       .from('crews')
       .insert({
         name:        name.trim(),
         description: desc.trim(),
-        emoji,
-        creator_id:  user!.id,
+        emoji:       icon,                // 存 Ionicon 名（CrewIcon 兼容渲染）
+        creator_id:  user.id,
         invite_code: inviteCode,
       })
       .select()
       .single();
 
     if (crewErr || !crew) {
-      setError('Failed to create crew. Please try again.');
+      // 真实错误日志，方便 debug RLS / schema 问题
+      console.error('[CreateCrew] insert error:', crewErr);
+      setError(crewErr?.message ?? 'Failed to create crew. Please try again.');
       setLoading(false);
       return;
     }
 
     // Add creator as owner member
-    await supabase
+    const { error: memberErr } = await supabase
       .from('crew_members')
-      .insert({ crew_id: crew.id, user_id: user!.id, role: 'owner' });
+      .insert({ crew_id: crew.id, user_id: user.id, role: 'owner' });
+    if (memberErr) console.error('[CreateCrew] member insert error:', memberErr);
 
     setLoading(false);
     navigation.replace('CrewDetail', { crewId: crew.id });
   };
 
+  const charCount = name.length;
+
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create a Crew</Text>
-        <View style={{ width: 38 }} />
-      </View>
+      <ScreenHeader title="Create a Crew" onBack={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Emoji picker */}
-        <Text style={styles.label}>Choose an Emoji</Text>
-        <View style={styles.emojiGrid}>
-          {EMOJI_OPTIONS.map(e => (
-            <TouchableOpacity
-              key={e}
-              style={[styles.emojiBtn, emoji === e && styles.emojiBtnActive]}
-              onPress={() => setEmoji(e)}
-            >
-              <Text style={styles.emojiOption}>{e}</Text>
-            </TouchableOpacity>
-          ))}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Icon picker */}
+        <Text style={styles.label}>Choose an icon</Text>
+        <View style={styles.iconGrid} accessibilityRole="radiogroup">
+          {ICON_OPTIONS.map(name => {
+            const active = icon === name;
+            return (
+              <Pressable
+                key={name}
+                onPress={() => setIcon(name)}
+                accessibilityRole="radio"
+                accessibilityLabel={name.replace('-outline', '').replace('-', ' ')}
+                accessibilityState={{ selected: active, checked: active }}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  active && styles.iconBtnActive,
+                  pressed && !active && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  name={name}
+                  size={20}
+                  color={active ? colors.koke : colors.text.secondary}
+                  accessible={false}
+                />
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* Name */}
-        <Text style={styles.label}>Crew Name <Text style={styles.required}>*</Text></Text>
+        <Text style={styles.label}>
+          Crew Name <Text style={styles.required}>*</Text>
+        </Text>
         <TextInput
           style={styles.input}
           placeholder="e.g. Weekend Warriors"
-          placeholderTextColor="#aaa"
+          placeholderTextColor={colors.text.hint}
           value={name}
           onChangeText={t => { setName(t); setError(''); }}
           maxLength={40}
+          accessibilityLabel="Crew name"
         />
-        <Text style={styles.charCount}>{name.length}/40</Text>
+        <Text style={styles.charCount}>{charCount}/40</Text>
 
         {/* Description */}
         <Text style={styles.label}>Description (optional)</Text>
         <TextInput
           style={[styles.input, styles.textarea]}
           placeholder="What's this crew about?"
-          placeholderTextColor="#aaa"
+          placeholderTextColor={colors.text.hint}
           value={desc}
           onChangeText={setDesc}
           multiline
           numberOfLines={3}
           maxLength={120}
+          accessibilityLabel="Crew description"
+          textAlignVertical="top"
         />
 
         {/* Preview */}
-        <View style={styles.preview}>
-          <Text style={styles.previewEmoji}>{emoji}</Text>
-          <View>
-            <Text style={styles.previewName}>{name || 'My Crew'}</Text>
-            <Text style={styles.previewMeta}>👥 1/8 members  ·  Invite code will be generated</Text>
+        <View style={styles.preview} accessible accessibilityLabel={`Preview: ${name || 'My Crew'}, with ${icon.replace('-outline', '')} icon`}>
+          <View style={styles.previewIconWrap}>
+            <CrewIcon value={icon} size={28} color={colors.koke} />
+          </View>
+          <View style={styles.previewMeta}>
+            <Text style={styles.previewName} numberOfLines={1}>{name || 'My Crew'}</Text>
+            <Text style={styles.previewSub}>1/8 members · Invite code generated on create</Text>
           </View>
         </View>
 
         {/* Error */}
         {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>⚠️  {error}</Text>
+          <View style={styles.errorBox} accessibilityLiveRegion="polite">
+            <Text style={styles.errorText}>⚠ {error}</Text>
           </View>
         ) : null}
 
         {/* Submit */}
-        <TouchableOpacity
-          style={[styles.createBtn, loading && { opacity: 0.6 }]}
-          onPress={handleCreate}
-          disabled={loading}
-        >
-          {loading
-            ? <ActivityIndicator color="#1a472a" />
-            : <Text style={styles.createBtnText}>Create Crew ⛳</Text>
-          }
-        </TouchableOpacity>
+        <View style={styles.submitWrap}>
+          <PrimaryButton
+            label="Create Crew"
+            onPress={handleCreate}
+            loading={loading}
+            accessibilityHint="Creates the crew and opens its detail page"
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f5f5f0' },
-  header: {
-    backgroundColor: '#1a472a',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 8,
+  safe: { flex: 1, backgroundColor: colors.washi },
+  content: {
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
   },
-  backBtn: { padding: 4, width: 38 },
-  headerTitle: { flex: 1, color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
-  content: { padding: 20, paddingBottom: 48 },
-  label: { fontSize: 14, fontWeight: '700', color: '#333', marginBottom: 8, marginTop: 16 },
-  required: { color: '#e53935' },
-  emojiGrid: {
+  pressed: { opacity: 0.6 },
+
+  // Field labels
+  label: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.base,
+    letterSpacing: 0.2,
+  },
+  required: { color: colors.aka, fontWeight: '700' },
+
+  // Icon picker grid
+  iconGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 4,
+    gap: spacing.sm,
   },
-  emojiBtn: {
+  iconBtn: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.shiro,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.usuzumi,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnActive: {
+    borderColor: colors.koke,
     borderWidth: 2,
-    borderColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: '#F3F7F2',
   },
-  emojiBtnActive: {
-    borderColor: '#1a472a',
-    backgroundColor: '#e8f5e9',
-  },
-  emojiOption: { fontSize: 24 },
+
+  // Inputs
   input: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    backgroundColor: colors.shiro,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.usuzumi,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    fontSize: typography.base,
+    color: colors.text.primary,
+    minHeight: 52,
   },
   textarea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
+    minHeight: 96,
+    paddingTop: spacing.md,
   },
-  charCount: { fontSize: 11, color: '#bbb', textAlign: 'right', marginTop: 4 },
+  charCount: {
+    fontSize: typography.xs,
+    color: colors.text.hint,
+    textAlign: 'right',
+    marginTop: spacing.xs,
+  },
+
+  // Preview card
   preview: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 16,
-    marginTop: 20,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    backgroundColor: colors.shiro,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.usuzumi,
+    padding: spacing.base,
+    marginTop: spacing.lg,
+    gap: spacing.md,
   },
-  previewEmoji: { fontSize: 40 },
-  previewName: { fontSize: 16, fontWeight: '700', color: '#1a472a' },
-  previewMeta: { fontSize: 12, color: '#aaa', marginTop: 4 },
-  errorBox: {
-    backgroundColor: 'rgba(220,53,69,0.1)',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(220,53,69,0.3)',
-  },
-  errorText: { color: '#c62828', fontSize: 14 },
-  createBtn: {
-    backgroundColor: '#d4af37',
-    borderRadius: 14,
-    padding: 18,
+  previewIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.kokeTint,
     alignItems: 'center',
-    marginTop: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
+    justifyContent: 'center',
   },
-  createBtnText: { color: '#1a472a', fontSize: 17, fontWeight: 'bold' },
+  previewMeta: { flex: 1 },
+  previewName: {
+    fontSize: typography.base,
+    fontFamily: fontFamily.serif,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  previewSub: {
+    fontSize: typography.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+
+  // Error
+  errorBox: {
+    backgroundColor: colors.shiro,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.aka,
+    padding: spacing.md,
+    marginTop: spacing.base,
+  },
+  errorText: {
+    color: colors.aka,
+    fontSize: typography.sm,
+  },
+
+  submitWrap: { marginTop: spacing.xl },
 });

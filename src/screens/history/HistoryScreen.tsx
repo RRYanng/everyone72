@@ -9,10 +9,11 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, SafeAreaView,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { Round } from '../../types';
 import { RootStackParamList } from '../../navigation';
 import { ScreenHeader } from '../../components';
@@ -33,7 +34,7 @@ export default function HistoryScreen() {
   const navigation = useNavigation<NavProp>();
   const data = useHistoryData();
   const {
-    rounds, loading, refreshing, setRefreshing,
+    rounds, loading, refreshing, setRefreshing, fetchError,
     troubleStats, troubleInsight, loadingInsight,
     diagnosisReport, loadingDiagnosis, diagnosisError,
     fetchRounds, fetchDiagnosis, resetDiagnosis,
@@ -95,7 +96,20 @@ export default function HistoryScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#1a472a" />
+          <ActivityIndicator size="large" color={colors.koke} />
+        </View>
+      ) : fetchError ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.text.hint} />
+          <Text style={styles.errorTitle}>Connection Error</Text>
+          <Text style={styles.errorMessage}>{fetchError}</Text>
+          <Pressable
+            onPress={() => { setRefreshing(true); fetchRounds(); }}
+            style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="refresh-outline" size={16} color={colors.shiro} />
+            <Text style={styles.retryText}>Try Again</Text>
+          </Pressable>
         </View>
       ) : activeTab === 'rounds' || !showTabs ? (
         <FlatList
@@ -157,8 +171,43 @@ const styles = StyleSheet.create({
   },
   emptyContainer: { alignItems: 'center', paddingTop: 60 },
   emptyEmoji:     { fontSize: 56, marginBottom: 12 },
-  emptyTitle:     { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  emptyTitle:     { fontSize: typography.lg, fontWeight: '700', color: colors.text.primary },
   emptySub:       {
-    fontSize: 14, color: '#888', marginTop: 8, textAlign: 'center', paddingHorizontal: 32,
+    fontSize: typography.sm, color: colors.text.secondary, marginTop: 8, textAlign: 'center', paddingHorizontal: 32,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing['2xl'],
+  },
+  errorTitle: {
+    fontSize: typography.lg,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginTop: spacing.base,
+    marginBottom: spacing.sm,
+  },
+  errorMessage: {
+    fontSize: typography.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: typography.sm * 1.5,
+    marginBottom: spacing.lg,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.koke,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 20,
+  },
+  retryText: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.shiro,
   },
 });

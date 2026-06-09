@@ -37,6 +37,8 @@ export function useHistoryData() {
   const [troubleInsight, setTroubleInsight] = useState<string>('');
   const [loadingInsight, setLoadingInsight] = useState(false);
 
+  const [fetchError,       setFetchError]       = useState('');
+
   const [diagnosisReport,  setDiagnosisReport]  = useState<DiagnosisReport | null>(null);
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
   const [diagnosisFetched, setDiagnosisFetched] = useState(false);
@@ -102,17 +104,30 @@ export function useHistoryData() {
     }
 
     if (!user) { setLoading(false); setRefreshing(false); return; }
-    const { data } = await supabase
-      .from('rounds')
-      .select('*, courses(name, city, state, course_rating, slope_rating, total_par)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+    setFetchError('');
+    try {
+      const { data, error } = await supabase
+        .from('rounds')
+        .select('*, courses(name, city, state, course_rating, slope_rating, total_par)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
-    if (data) {
-      setRounds(data as Round[]);
-      if (data.length >= 3) analyzeTroubles(data.slice(0, 10) as Round[]);
-      setDiagnosisFetched(false);
-      setDiagnosisReport(null);
+      if (error) throw error;
+
+      if (data) {
+        setRounds(data as Round[]);
+        if (data.length >= 3) analyzeTroubles(data.slice(0, 10) as Round[]);
+        setDiagnosisFetched(false);
+        setDiagnosisReport(null);
+      }
+    } catch (err: any) {
+      const msg = err?.message ?? 'Failed to load rounds.';
+      // Supabase paused project detection
+      if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed')) {
+        setFetchError('Unable to connect. Your Supabase project may be paused — restore it at app.supabase.com, then pull to refresh.');
+      } else {
+        setFetchError(msg);
+      }
     }
     setLoading(false);
     setRefreshing(false);
@@ -173,7 +188,7 @@ export function useHistoryData() {
 
   return {
     // state
-    rounds, loading, refreshing, setRefreshing,
+    rounds, loading, refreshing, setRefreshing, fetchError,
     troubleStats, troubleInsight, loadingInsight,
     diagnosisReport, loadingDiagnosis, diagnosisError,
     // actions

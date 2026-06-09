@@ -263,6 +263,36 @@ export const MOCK_USER_STATS: UserStats = {
   updated_at: new Date().toISOString(),
 } as any;
 
+// ── Last completed round (DEV mock) ─────────────────────────────
+// 由 ScorecardScreen 在 mock save 时写入，AnalysisScreen 读取展示。
+type LastMockRound = {
+  courseId: string;
+  totalHoles: number;
+  totalStrokes: number;
+  totalPutts: number;
+  scoreVsPar: number;
+  teeBox: string;
+  holes: any[];   // HoleScore[] shape
+  createdAt: string;
+};
+
+let _lastMockRound: LastMockRound | null = null;
+
+export function setLastMockRound(data: LastMockRound): void {
+  _lastMockRound = data;
+}
+
+export function getLastMockRound(): LastMockRound | null {
+  return _lastMockRound;
+}
+
+// 静态 AI feedback —— mock 模式下避免调用 Claude API
+export const MOCK_ANALYSIS_FEEDBACK =
+  "Solid round overall. Your scoring was carried by steady ball-striking, but two patterns held you back from going lower:\n\n" +
+  "1. Putting cost you ~3 strokes vs a 30-putt baseline. Most lost strokes came from first putts outside 25 ft — lag distance control is the leak, not stroke mechanics.\n\n" +
+  "2. Par-4 tee shots left you in trouble on 3 of 11 par 4s. Consider a more conservative club off the tee on the holes where you struggled.\n\n" +
+  "Quick win this week: 15 min/day on the practice green working 3-putt circles at 20, 30, 40 ft. Track putts/round — aim for under 31 over the next 4 rounds.";
+
 // ── Flag + pub/sub ──────────────────────────────────────────────
 let devMockActive = false;
 const listeners = new Set<() => void>();

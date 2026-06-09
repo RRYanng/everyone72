@@ -19,6 +19,7 @@ import { LoadingSpinner } from '../../components';
 import { Crew } from '../../types';
 import { RootStackParamList } from '../../navigation';
 import { colors, radius, spacing, typography, fontFamily } from '../../theme';
+import { CrewIcon } from './CrewIcon';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -157,7 +158,9 @@ export default function CrewListScreen() {
       }
       style={({ pressed }) => [styles.crewCard, pressed && styles.pressedRow]}
     >
-      <Text style={styles.crewEmoji} accessible={false}>{item.emoji}</Text>
+      <View style={styles.crewIconWrap} accessible={false}>
+        <CrewIcon value={item.emoji} size={28} color={colors.koke} />
+      </View>
       <View style={styles.crewInfo}>
         <Text style={styles.crewName} numberOfLines={1}>{item.name}</Text>
         {item.description ? (
@@ -528,6 +531,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   crewEmoji: { fontSize: 32 },
+  crewIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.kokeTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   crewInfo: { flex: 1 },
   crewName: {
     fontSize: typography.base,

@@ -2,7 +2,7 @@
 // 首页 — Golf Journal 风格（编辑式 + 水彩插画）
 // ============================================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image,
 } from 'react-native';
@@ -26,6 +26,7 @@ import {
 } from '../../lib/mockUser';
 import { RootStackParamList } from '../../navigation';
 import { colors, radius, spacing, typography, fontFamily } from '../../theme';
+import { findAnyDraft, ScorecardDraft } from '../../hooks/useScorecardDraft';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -66,9 +67,11 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const [recentRounds, setRecentRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [username, setUsername] = useState('');
   const [activePlan, setActivePlan] = useState<PracticePlan | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [draftInfo, setDraftInfo] = useState<ScorecardDraft | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -77,6 +80,8 @@ export default function HomeScreen() {
       fetchActivePlan();
       fetchUserStats();
     }
+    // Check for unfinished draft
+    findAnyDraft().then(d => setDraftInfo(d));
   }, [user]);
 
   const fetchProfile = async () => {
@@ -98,13 +103,24 @@ export default function HomeScreen() {
       setLoading(false);
       return;
     }
-    const { data } = await supabase
-      .from('rounds')
-      .select('*, courses(name, city, state)')
-      .eq('user_id', user!.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (data) setRecentRounds(data as Round[]);
+    setFetchError('');
+    try {
+      const { data, error } = await supabase
+        .from('rounds')
+        .select('*, courses(name, city, state)')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      if (data) setRecentRounds(data as Round[]);
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      if (msg.includes('fetch') || msg.includes('Failed') || msg.includes('network')) {
+        setFetchError('Unable to connect. Your Supabase project may be paused.');
+      } else {
+        setFetchError(msg || 'Failed to load data.');
+      }
+    }
     setLoading(false);
   };
 
@@ -237,6 +253,45 @@ export default function HomeScreen() {
               </View>
             ) : null}
           </View>
+        ) : null}
+
+        {/* Draft Recovery Banner */}
+        {draftInfo && (
+          <Pressable
+            onPress={() => {
+              setDraftInfo(null);
+              navigation.navigate('Scorecard', {
+                courseId: draftInfo.courseId,
+                totalHoles: draftInfo.totalHoles as 9 | 18,
+                teeBox: draftInfo.teeBox,
+              });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Resume unfinished round"
+            style={({ pressed }) => [styles.draftBanner, pressed && { opacity: 0.85 }]}
+          >
+            <Ionicons name="document-text-outline" size={20} color={colors.kincha} />
+            <View style={styles.draftBannerContent}>
+              <Text style={styles.draftBannerTitle}>Unfinished Round</Text>
+              <Text style={styles.draftBannerSub}>Tap to continue where you left off</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.text.hint} />
+          </Pressable>
+        )}
+
+        {/* Connection Error Banner */}
+        {fetchError ? (
+          <Pressable
+            onPress={() => { setFetchError(''); fetchRecentRounds(); }}
+            style={({ pressed }) => [styles.errorBanner, pressed && { opacity: 0.85 }]}
+          >
+            <Ionicons name="cloud-offline-outline" size={20} color={colors.aka} />
+            <View style={styles.draftBannerContent}>
+              <Text style={styles.errorBannerTitle}>{fetchError}</Text>
+              <Text style={styles.draftBannerSub}>Tap to retry</Text>
+            </View>
+            <Ionicons name="refresh-outline" size={18} color={colors.text.hint} />
+          </Pressable>
         ) : null}
 
         {/* Start New Round button */}

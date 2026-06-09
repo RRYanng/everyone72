@@ -1,26 +1,57 @@
 // ============================================================
-// AI 成绩分析界面
+// AI 成绩分析界面 — 日式极简风格
 // 显示 Claude 对本轮成绩的分析反馈
 // ============================================================
 
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, ScrollView, ActivityIndicator, Alert, Animated,
+  View, Text, StyleSheet, SafeAreaView, ScrollView,
+  ActivityIndicator, Alert, Animated,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
+
 import { supabase } from '../../lib/supabase';
 import { analyzeRound, generatePracticePlan } from '../../lib/claude';
 import { Round, HoleScore, Course, PracticePlan } from '../../types';
 import { COURSES } from '../../data/courses';
 import { RootStackParamList } from '../../navigation';
+import { Card, ScreenHeader, LoadingSpinner } from '../../components';
+import {
+  isDevMockActive, getLastMockRound, MOCK_ANALYSIS_FEEDBACK, MOCK_ACTIVE_PLAN,
+} from '../../lib/mockUser';
+import { colors, spacing, typography, fontFamily, radius } from '../../theme';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RoutePropType = RouteProp<RootStackParamList, 'Analysis'>;
 
-// 成绩分布统计
+// ── Watercolor SVG — 小型球场装饰 ──────────────────────────
+const GRASS_LIGHT = '#D8E8D0';
+const GRASS_MID   = '#C8DFC8';
+const TREE_GREEN  = '#A8C8A0';
+
+function MiniCourseWatercolor() {
+  return (
+    <Svg width="100%" height="100%" viewBox="0 0 200 80" preserveAspectRatio="xMaxYMax slice">
+      <Path
+        d="M 0 30 Q 40 15, 90 25 Q 140 18, 200 28 L 200 50 L 0 50 Z"
+        fill={GRASS_LIGHT} opacity={0.6}
+      />
+      <Path
+        d="M 0 40 Q 60 30, 120 38 Q 170 34, 200 40 L 200 80 L 0 80 Z"
+        fill={GRASS_MID} opacity={0.8}
+      />
+      <Circle cx={50} cy={38} r={5} fill={TREE_GREEN} opacity={0.6} />
+      <Circle cx={155} cy={35} r={6} fill={TREE_GREEN} opacity={0.55} />
+      <Line x1={100} y1={55} x2={100} y2={38} stroke={colors.text.hint} strokeWidth={0.8} />
+      <Path d="M 100 38 L 112 41 L 100 44 Z" fill={colors.aka} opacity={0.75} />
+    </Svg>
+  );
+}
+
+// ── 成绩分布统计 ──────────────────────────────────────────────
 function ScoreSummary({ scores }: { scores: HoleScore[] }) {
   const counts = { eagle: 0, birdie: 0, par: 0, bogey: 0, double: 0, worse: 0 };
   scores.forEach(s => {
@@ -34,11 +65,11 @@ function ScoreSummary({ scores }: { scores: HoleScore[] }) {
   });
 
   const items = [
-    { label: 'Eagle+', count: counts.eagle, color: '#d4af37' },
-    { label: 'Birdie', count: counts.birdie, color: '#4caf50' },
-    { label: 'Par', count: counts.par, color: '#888' },
-    { label: 'Bogey', count: counts.bogey, color: '#ff9800' },
-    { label: 'Double+', count: counts.double + counts.worse, color: '#f44336' },
+    { label: 'Eagle+', count: counts.eagle, color: colors.kincha },
+    { label: 'Birdie', count: counts.birdie, color: colors.koke },
+    { label: 'Par', count: counts.par, color: colors.text.secondary },
+    { label: 'Bogey', count: counts.bogey, color: colors.kincha },
+    { label: 'Double+', count: counts.double + counts.worse, color: colors.aka },
   ];
 
   return (
@@ -53,6 +84,7 @@ function ScoreSummary({ scores }: { scores: HoleScore[] }) {
   );
 }
 
+// ── Main Component ──────────────────────────────────────────
 export default function AnalysisScreen() {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RoutePropType>();
@@ -77,6 +109,42 @@ export default function AnalysisScreen() {
   }, []);
 
   const fetchRoundData = async () => {
+    // ── DEV mock：跳过 Supabase，使用 ScorecardScreen 写入的真实轮次数据 ──
+    if (isDevMockActive()) {
+      const last = getLastMockRound();
+      if (last) {
+        const fakeRound = {
+          id: roundId,
+          user_id: 'dev-mock-user-0000',
+          course_id: last.courseId,
+          tee_box: last.teeBox,
+          total_holes: last.totalHoles,
+          total_strokes: last.totalStrokes,
+          total_putts: last.totalPutts,
+          score_vs_par: last.scoreVsPar,
+          ai_feedback: MOCK_ANALYSIS_FEEDBACK,
+          created_at: last.createdAt,
+        } as unknown as Round;
+        const foundCourse = COURSES.find(c => c.id === last.courseId) || null;
+        setRound(fakeRound);
+        setHoleScores(last.holes as HoleScore[]);
+        setCourse(foundCourse);
+        setFeedback(MOCK_ANALYSIS_FEEDBACK);
+        setPracticePlan(MOCK_ACTIVE_PLAN.plan_text);
+        setPlanSaved(true);
+        setLoadingData(false);
+        Animated.parallel([
+          Animated.timing(feedbackOpacity, { toValue: 1, duration: 500, delay: 200, useNativeDriver: true }),
+          Animated.timing(cardSlide, { toValue: 0, duration: 350, delay: 200, useNativeDriver: true }),
+        ]).start();
+        return;
+      }
+      // 没有 last round（比如直接刷新了 Analysis 页）—— 回退到第一条 mock round
+      setLoadingData(false);
+      setFeedback('No round data available in DEV mode. Start a new round to see analysis.');
+      return;
+    }
+
     // 获取 round 数据
     const { data: roundData } = await supabase
       .from('rounds')
@@ -179,17 +247,17 @@ export default function AnalysisScreen() {
   };
 
   const scoreColor = (vs_par: number) => {
-    if (vs_par <= 0) return '#d4af37';
-    if (vs_par <= 5) return '#4caf50';
-    if (vs_par <= 10) return '#ff9800';
-    return '#f44336';
+    if (vs_par <= 0) return colors.kincha;
+    if (vs_par <= 5)  return colors.koke;
+    if (vs_par <= 10) return colors.text.primary;
+    return colors.aka;
   };
 
   if (loadingData) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#1a472a" />
+          <LoadingSpinner />
         </View>
       </SafeAreaView>
     );
@@ -197,24 +265,30 @@ export default function AnalysisScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* 顶部栏 */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.popToTop()} style={{ width: 40 }}>
-          <Ionicons name="home-outline" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Round Analysis</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      {/* ScreenHeader — 与其他页面一致 */}
+      <ScreenHeader
+        title="Round Analysis"
+        onBack={() => navigation.popToTop()}
+      />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* 成绩总览卡片 */}
-        <View style={styles.roundCard}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 成绩总览卡片 — 带水彩装饰 */}
+        <Card style={styles.roundCard}>
+          {/* 水彩背景装饰 */}
+          <View style={styles.watercolorWrap} pointerEvents="none" accessible={false}>
+            <MiniCourseWatercolor />
+          </View>
+
           <Text style={styles.courseName}>{course?.name ?? 'Unknown Course'}</Text>
           <Text style={styles.courseInfo}>
             {course?.city}, {course?.state}
             {'  ·  '}
             {round ? new Date(round.created_at).toLocaleDateString() : ''}
           </Text>
+
           <View style={styles.scoreRow}>
             <View style={styles.scoreBlock}>
               <Text style={[styles.scoreBig, { color: scoreColor(round?.score_vs_par ?? 0) }]}>
@@ -222,12 +296,14 @@ export default function AnalysisScreen() {
               </Text>
               <Text style={styles.scoreSmallLabel}>Total</Text>
             </View>
+            <View style={styles.scoreVDivider} />
             <View style={styles.scoreBlock}>
               <Text style={[styles.scoreBig, { color: scoreColor(round?.score_vs_par ?? 0) }]}>
                 {(round?.score_vs_par ?? 0) > 0 ? '+' : ''}{round?.score_vs_par}
               </Text>
               <Text style={styles.scoreSmallLabel}>vs Par</Text>
             </View>
+            <View style={styles.scoreVDivider} />
             <View style={styles.scoreBlock}>
               <Text style={styles.scoreBig}>{round?.total_putts}</Text>
               <Text style={styles.scoreSmallLabel}>Putts</Text>
@@ -236,19 +312,21 @@ export default function AnalysisScreen() {
 
           {/* 成绩分布 */}
           {holeScores.length > 0 && <ScoreSummary scores={holeScores} />}
-        </View>
+        </Card>
 
         {/* AI 分析区域 */}
-        <View style={styles.aiCard}>
+        <Card style={styles.aiCard}>
           <View style={styles.aiHeader}>
-            <Ionicons name="analytics" size={20} color="#1a472a" />
+            <Ionicons name="analytics-outline" size={18} color={colors.koke} />
             <Text style={styles.aiTitle}>AI Coach Feedback</Text>
-            <Text style={styles.aiPowered}>Powered by Claude</Text>
+            <View style={styles.aiBadge}>
+              <Text style={styles.aiBadgeText}>Claude</Text>
+            </View>
           </View>
 
           {loadingAI ? (
             <View style={styles.aiLoading}>
-              <ActivityIndicator color="#1a472a" />
+              <ActivityIndicator color={colors.koke} />
               <Text style={styles.aiLoadingText}>Analyzing your round...</Text>
             </View>
           ) : (
@@ -256,41 +334,53 @@ export default function AnalysisScreen() {
               <Text style={styles.aiFeedback}>{feedback || 'No analysis available.'}</Text>
             </Animated.View>
           )}
-        </View>
+        </Card>
 
         {/* 练习计划卡片 */}
         {(loadingPlan || practicePlan) && (
-          <View style={styles.planCard}>
+          <Card style={styles.planCard}>
             <View style={styles.planHeader}>
-              <Text style={styles.planIcon}>📅</Text>
+              <Ionicons name="calendar-outline" size={18} color={colors.kincha} />
               <Text style={styles.planTitle}>Your Practice Plan</Text>
-              {planSaved && <Text style={styles.planSaved}>✓ Saved</Text>}
+              {planSaved && (
+                <View style={styles.savedBadge}>
+                  <Ionicons name="checkmark-circle-outline" size={14} color={colors.koke} />
+                  <Text style={styles.savedText}>Saved</Text>
+                </View>
+              )}
             </View>
             {loadingPlan && !practicePlan ? (
-              <View style={styles.planLoading}>
-                <ActivityIndicator size="small" color="#d4af37" />
-                <Text style={styles.planLoadingText}>Building your weekly plan...</Text>
+              <View style={styles.aiLoading}>
+                <ActivityIndicator size="small" color={colors.kincha} />
+                <Text style={styles.aiLoadingText}>Building your weekly plan...</Text>
               </View>
             ) : (
               <Text style={styles.planText}>{practicePlan}</Text>
             )}
-          </View>
+          </Card>
         )}
 
         {/* 每洞详细成绩 */}
-        <Text style={styles.sectionTitle}>Hole by Hole</Text>
-        <View style={styles.holesTable}>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Hole by Hole</Text>
+
+        <Card style={styles.holesCard}>
+          {/* Table Header */}
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 0.5 }]}>#</Text>
-            <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 0.7 }]}>Par</Text>
-            <Text style={[styles.tableCell, styles.tableHeaderText]}>Score</Text>
-            <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 0.8 }]}>Putts</Text>
-            <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 0.6 }]}>±</Text>
-            <Text style={[styles.tableCell, styles.tableHeaderText, { flex: 1.4 }]}>Trouble</Text>
+            <Text style={[styles.headerCell, { flex: 0.5 }]}>#</Text>
+            <Text style={[styles.headerCell, { flex: 0.7 }]}>Par</Text>
+            <Text style={[styles.headerCell]}>Score</Text>
+            <Text style={[styles.headerCell, { flex: 0.8 }]}>Putts</Text>
+            <Text style={[styles.headerCell, { flex: 0.6 }]}>±</Text>
+            <Text style={[styles.headerCell, { flex: 1.4 }]}>Trouble</Text>
           </View>
+
           {holeScores.map(h => {
             const diff = h.strokes - h.par;
-            const diffColor = diff < 0 ? '#4caf50' : diff === 0 ? '#555' : diff === 1 ? '#ff9800' : '#f44336';
+            const diffColor =
+              diff < 0    ? colors.koke
+              : diff === 0 ? colors.text.secondary
+              : diff === 1 ? colors.kincha
+              : colors.aka;
             const puttWarn = h.putts >= 3;
             const troubleEmojis: Record<string, string> = {
               water: '💧', ob: '🚫', bunker: '🏖️', rough: '🌿', other: '⛰️',
@@ -302,132 +392,233 @@ export default function AnalysisScreen() {
               <View key={h.hole_number} style={[styles.tableRow, h.hole_number % 2 === 0 && styles.tableRowAlt]}>
                 <Text style={[styles.tableCell, { flex: 0.5, fontWeight: '600' }]}>{h.hole_number}</Text>
                 <Text style={[styles.tableCell, { flex: 0.7 }]}>{h.par}</Text>
-                <Text style={[styles.tableCell, { fontWeight: 'bold' }]}>{h.strokes}</Text>
-                <Text style={[styles.tableCell, { flex: 0.8, color: puttWarn ? '#f44336' : '#333', fontWeight: puttWarn ? 'bold' : 'normal' }]}>
-                  {h.putts}{puttWarn ? '⚠️' : ''}
+                <Text style={[styles.tableCell, { fontWeight: '700' }]}>{h.strokes}</Text>
+                <Text style={[styles.tableCell, { flex: 0.8, color: puttWarn ? colors.aka : colors.text.primary, fontWeight: puttWarn ? '700' : '400' }]}>
+                  {h.putts}{puttWarn ? ' ⚠️' : ''}
                 </Text>
-                <Text style={[styles.tableCell, { flex: 0.6, color: diffColor, fontWeight: 'bold' }]}>
+                <Text style={[styles.tableCell, { flex: 0.6, color: diffColor, fontWeight: '700' }]}>
                   {diff > 0 ? '+' : ''}{diff}
                 </Text>
-                <Text style={[styles.tableCell, { flex: 1.4, fontSize: 13 }]}>{troubleStr}</Text>
+                <Text style={[styles.tableCell, { flex: 1.4, fontSize: typography.xs + 1 }]}>{troubleStr}</Text>
               </View>
             );
           })}
-        </View>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ── Styles — 日式极简设计系统 ──────────────────────────────
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f5f5f0' },
+  safe: { flex: 1, backgroundColor: colors.washi },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    backgroundColor: '#1a472a',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    paddingTop: 8,
+
+  content: {
+    padding: spacing.base,
+    paddingBottom: spacing['2xl'],
   },
-  headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  content: { padding: 16, paddingBottom: 40 },
+
+  // ── Round card
   roundCard: {
-    backgroundColor: '#1a472a',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    padding: spacing.lg,
+    marginBottom: spacing.base,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  courseName: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  courseInfo: { color: '#a8d5b5', fontSize: 12, marginTop: 4 },
-  scoreRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 16, marginBottom: 16 },
+  watercolorWrap: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: '50%',
+    height: 80,
+    opacity: 0.5,
+  },
+  courseName: {
+    fontSize: typography.lg,
+    fontFamily: fontFamily.serif,
+    fontWeight: '700',
+    color: colors.text.primary,
+    letterSpacing: 0.2,
+  },
+  courseInfo: {
+    fontSize: typography.xs,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+    letterSpacing: 0.3,
+  },
+  scoreRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing.base,
+  },
   scoreBlock: { alignItems: 'center' },
-  scoreBig: { color: '#d4af37', fontSize: 32, fontWeight: 'bold' },
-  scoreSmallLabel: { color: '#a8d5b5', fontSize: 12, marginTop: 2 },
+  scoreBig: {
+    fontSize: typography['2xl'],
+    fontWeight: '700',
+    color: colors.text.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  scoreSmallLabel: {
+    fontSize: typography.xs,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+    letterSpacing: 0.3,
+  },
+  scoreVDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 36,
+    backgroundColor: colors.usuzumi,
+  },
+
+  // ── Score summary
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.15)',
-    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.usuzumi,
+    paddingTop: spacing.md,
   },
   summaryItem: { alignItems: 'center' },
-  summaryCount: { fontSize: 20, fontWeight: 'bold' },
-  summaryLabel: { color: '#a8d5b5', fontSize: 10, marginTop: 2 },
+  summaryCount: {
+    fontSize: typography.lg,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  summaryLabel: {
+    fontSize: 10,
+    color: colors.text.hint,
+    marginTop: 2,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+
+  // ── AI analysis card
   aiCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
-  aiHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 8 },
-  aiTitle: { fontSize: 16, fontWeight: 'bold', color: '#1a472a', flex: 1 },
-  aiPowered: { fontSize: 10, color: '#aaa' },
-  aiLoading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  aiLoadingText: { color: '#888', fontSize: 14 },
-  aiFeedback: { fontSize: 15, color: '#333', lineHeight: 24 },
-  sectionTitle: {
-    fontSize: 16, fontWeight: '700', color: '#1a472a',
-    marginBottom: 10, marginTop: 4,
-  },
-  holesTable: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  tableHeader: {
+  aiHeader: {
     flexDirection: 'row',
-    backgroundColor: '#1a472a',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
-  tableHeaderText: { color: '#a8d5b5', fontWeight: '700', fontSize: 12 },
-  tableRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 16 },
-  tableRowAlt: { backgroundColor: '#f9f9f6' },
-  tableCell: { flex: 1, fontSize: 14, color: '#333', textAlign: 'center' },
+  aiTitle: {
+    fontSize: typography.base,
+    fontWeight: '600',
+    color: colors.text.primary,
+    flex: 1,
+  },
+  aiBadge: {
+    backgroundColor: colors.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  aiBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.text.secondary,
+    letterSpacing: 0.5,
+  },
+  aiLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  aiLoadingText: {
+    color: colors.text.secondary,
+    fontSize: typography.sm,
+  },
+  aiFeedback: {
+    fontSize: typography.sm + 1,
+    color: colors.text.primary,
+    lineHeight: (typography.sm + 1) * 1.6,
+  },
+
+  // ── Practice plan card
   planCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#d4af37',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    padding: spacing.base,
+    marginBottom: spacing.base,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.kincha,
   },
   planHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
-    gap: 8,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
-  planIcon: { fontSize: 20 },
-  planTitle: { fontSize: 16, fontWeight: 'bold', color: '#1a472a', flex: 1 },
-  planSaved: { fontSize: 12, color: '#4caf50', fontWeight: '600' },
-  planLoading: {
+  planTitle: {
+    fontSize: typography.base,
+    fontWeight: '600',
+    color: colors.text.primary,
+    flex: 1,
+  },
+  savedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
+    gap: 4,
   },
-  planLoadingText: { color: '#888', fontSize: 14 },
+  savedText: {
+    fontSize: typography.xs,
+    color: colors.koke,
+    fontWeight: '600',
+  },
   planText: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 22,
-    fontFamily: undefined,
+    fontSize: typography.sm,
+    color: colors.text.primary,
+    lineHeight: typography.sm * 1.6,
+  },
+
+  // ── Section title
+  sectionTitle: {
+    fontSize: typography.lg,
+    fontFamily: fontFamily.serif,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+
+  // ── Holes table
+  holesCard: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: colors.washi,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.usuzumi,
+  },
+  headerCell: {
+    flex: 1,
+    fontSize: typography.xs,
+    fontWeight: '700',
+    color: colors.text.hint,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.base,
+  },
+  tableRowAlt: {
+    backgroundColor: colors.washi,
+  },
+  tableCell: {
+    flex: 1,
+    fontSize: typography.sm,
+    color: colors.text.primary,
+    textAlign: 'center',
   },
 });
