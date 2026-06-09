@@ -8,7 +8,9 @@
 -- 1) profiles 扩字段(全部可空,不破坏现有行)
 alter table public.profiles
   add column if not exists city            text,
-  add column if not exists home_course_id  text references public.courses(id),
+  -- 不加 courses 外键:courses 是用户提交整轮时才 lazy seed 的。
+  -- 带外键时,用户选了一个尚未提交过的球场作主场,会导致整个档案保存失败。
+  add column if not exists home_course_id  text,
   add column if not exists availability    text[],
   add column if not exists bio             text;
 

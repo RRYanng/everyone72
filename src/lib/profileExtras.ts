@@ -17,7 +17,10 @@ export async function getProfileExtras(userId: string): Promise<ProfileExtras | 
 }
 
 export async function saveProfileExtras(userId: string, extras: ProfileExtras): Promise<boolean> {
-  const { error } = await supabase
+  // profiles 行在注册时建立,正常一定存在。但若因某种原因缺行,
+  // 无条件的 update 会"成功"却影响 0 行 —— 用 .select() 回读受影响行,
+  // 影响 0 行时返回 false,让前端能提示而不是静默失败。
+  const { data, error } = await supabase
     .from('profiles')
     .update({
       city: extras.city,
@@ -25,8 +28,10 @@ export async function saveProfileExtras(userId: string, extras: ProfileExtras): 
       availability: extras.availability,
       bio: extras.bio,
     })
-    .eq('id', userId);
-  return !error;
+    .eq('id', userId)
+    .select('id');
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
 }
 
 /** 城市是约局/看局的硬门槛 */
