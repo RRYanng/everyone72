@@ -5,9 +5,10 @@
 // 发起人额外:审批 pending、移除成员、取消局。
 // ============================================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView,
+  TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,8 +20,9 @@ import {
   getOuting, listMembers, joinOuting, leaveOuting,
   approveMember, removeMember, cancelOuting,
 } from '../../lib/outings';
+import { listComments, postComment, subscribeComments } from '../../lib/outingComments';
 import { COURSES } from '../../data/courses';
-import { Outing, OutingMember } from '../../types/buddies';
+import { Outing, OutingMember, OutingComment } from '../../types/buddies';
 import { RootStackParamList } from '../../navigation';
 import { Card, ScreenHeader, LoadingSpinner, PrimaryButton, SecondaryButton } from '../../components';
 import { colors, radius, spacing, typography, fontFamily } from '../../theme';
@@ -58,6 +60,13 @@ function courseName(id: string): string {
   return COURSES.find(c => c.id === id)?.name ?? id;
 }
 
+function formatCommentTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function OutingDetailScreen() {
   const navigation = useNavigation<NavProp>();
   const route      = useRoute<RouteT>();
@@ -70,6 +79,11 @@ export default function OutingDetailScreen() {
   const [loading, setLoading]     = useState(true);
   const [busy, setBusy]           = useState(false);
   const [error, setError]         = useState('');
+
+  // 留言板(Phase 5)
+  const [comments, setComments]     = useState<OutingComment[]>([]);
+  const [commentBody, setCommentBody] = useState('');
+  const [posting, setPosting]       = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +111,17 @@ export default function OutingDetailScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // ── 留言板:拉历史 + 实时订阅(随 outingId 重建,卸载退订) ──────
+  useEffect(() => {
+    let active = true;
+    listComments(outingId).then(rows => { if (active) setComments(rows); });
+    const unsub = subscribeComments(outingId, c => {
+      // 自己 postComment 后 Realtime 也会推回同一条 —— 按 id 去重
+      setComments(prev => (prev.some(x => x.id === c.id) ? prev : [...prev, c]));
+    });
+    return () => { active = false; unsub(); };
+  }, [outingId]);
+
   // ── 派生状态 ───────────────────────────────────────────────
   const me          = user ? members.find(m => m.user_id === user.id) ?? null : null;
   const isOrganizer = !!user && !!outing && outing.organizer_id === user.id;
@@ -104,6 +129,27 @@ export default function OutingDetailScreen() {
   const pendingMembers = members.filter(m => m.status === 'pending');
   const isCancelled = outing?.status === 'cancelled';
   const isFull = !!outing && (outing.status === 'full' || joinedMembers.length >= outing.slots_total);
+  const canComment = !!me && (me.status === 'joined' || isOrganizer);
+
+  // 留言作者名:成员都在 members 里(发言权限=joined/发起人),组织者兜底
+  const nameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    members.forEach(m => { map[m.user_id] = m.username; });
+    if (organizer) map[organizer.id] = organizer.username;
+    return map;
+  }, [members, organizer]);
+
+  const handlePostComment = async () => {
+    if (!user) return;
+    const text = commentBody.trim();
+    if (!text) return;
+    setError('');
+    setPosting(true);
+    const ok = await postComment(outingId, user.id, text);
+    setPosting(false);
+    if (ok) setCommentBody('');           // 新留言由 Realtime 推回并追加
+    else setError('留言失败,请重试。');
+  };
 
   // ── 操作 ───────────────────────────────────────────────────
   const run = async (fn: () => Promise<boolean>, failMsg: string) => {
@@ -155,7 +201,16 @@ export default function OutingDetailScreen() {
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="局详情" onBack={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      >
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* 概要 */}
         <Card style={styles.section}>
           <View style={styles.titleRow}>
@@ -294,13 +349,69 @@ export default function OutingDetailScreen() {
             />
           )}
         </View>
+
+        {/* 留言板(Phase 5) */}
+        <Text style={styles.sectionLabel}>留言板</Text>
+        <Card style={styles.section}>
+          {comments.length === 0 ? (
+            <Text style={styles.emptyHint}>
+              还没有留言{canComment ? ',来说点什么吧。' : '。'}
+            </Text>
+          ) : (
+            comments.map((c, idx) => (
+              <View key={c.id} style={[styles.commentRow, idx > 0 && styles.memberDivider]}>
+                <View style={styles.commentHead}>
+                  <Text style={styles.commentAuthor} numberOfLines={1}>
+                    {nameById[c.user_id] ?? '球友'}
+                    {c.user_id === outing.organizer_id ? ' · 发起人' : ''}
+                  </Text>
+                  <Text style={styles.commentTime}>{formatCommentTime(c.created_at)}</Text>
+                </View>
+                <Text style={styles.commentBody}>{c.body}</Text>
+              </View>
+            ))
+          )}
+        </Card>
+
+        {canComment ? (
+          <View style={styles.composer}>
+            <TextInput
+              style={styles.composerInput}
+              value={commentBody}
+              onChangeText={setCommentBody}
+              placeholder="说点什么…"
+              placeholderTextColor={colors.text.hint}
+              multiline
+              maxLength={500}
+              editable={!posting}
+              accessibilityLabel="留言输入框"
+            />
+            <Pressable
+              onPress={handlePostComment}
+              disabled={posting || commentBody.trim().length === 0}
+              accessibilityRole="button"
+              accessibilityLabel="发送留言"
+              style={({ pressed }) => [
+                styles.sendBtn,
+                (posting || commentBody.trim().length === 0) && styles.sendBtnDisabled,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="arrow-up" size={18} color={colors.shiro} />
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={styles.mutedNote}>加入这个局后即可留言。</Text>
+        )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.washi },
+  flex: { flex: 1 },
   centerWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   content: { paddingHorizontal: spacing.base, paddingTop: spacing.md, paddingBottom: spacing.xl },
   pressed: { opacity: 0.6 },
@@ -378,5 +489,32 @@ const styles = StyleSheet.create({
   errorText: { color: colors.aka, fontSize: typography.sm },
 
   actionWrap: { marginTop: spacing.md },
-  mutedNote: { fontSize: typography.sm, color: colors.text.hint, textAlign: 'center' },
+  mutedNote: { fontSize: typography.sm, color: colors.text.hint, textAlign: 'center', marginTop: spacing.sm },
+
+  // Comments (Phase 5)
+  commentRow: { paddingVertical: spacing.sm },
+  commentHead: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
+    marginBottom: 2,
+  },
+  commentAuthor: { flex: 1, fontSize: typography.sm, fontWeight: '600', color: colors.text.primary },
+  commentTime: { fontSize: typography.xs, color: colors.text.hint, marginLeft: spacing.sm },
+  commentBody: {
+    fontSize: typography.sm, color: colors.text.primary, lineHeight: typography.sm * 1.5,
+  },
+  composer: {
+    flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginTop: spacing.sm,
+  },
+  composerInput: {
+    flex: 1, minHeight: 44, maxHeight: 120,
+    backgroundColor: colors.shiro,
+    borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.usuzumi,
+    paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm,
+    fontSize: typography.sm, color: colors.text.primary,
+  },
+  sendBtn: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.koke,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sendBtnDisabled: { backgroundColor: colors.kokeLight, opacity: 0.6 },
 });
