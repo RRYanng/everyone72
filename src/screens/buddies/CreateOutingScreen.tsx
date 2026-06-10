@@ -60,7 +60,9 @@ export default function CreateOutingScreen() {
       ).slice(0, COURSE_RESULT_LIMIT)
     : [];
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // 本地年月日,避免加州傍晚被 UTC 误判成"明天"
+  const n = new Date();
+  const todayStr = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
 
   const validate = (): string | null => {
     if (!courseId) return '请选择球场。';

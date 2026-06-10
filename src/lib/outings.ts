@@ -49,12 +49,15 @@ export async function createOuting(organizerId: string, input: NewOutingInput): 
 
 /** 同城开放的局(open/full),按开球日升序。城市用大小写不敏感匹配。 */
 export async function listCityOutings(city: string): Promise<Outing[]> {
+  // 用本地年月日,避免加州傍晚被 UTC 误判成"明天"而漏掉今天的局
+  const n = new Date();
+  const todayStr = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
   const { data } = await supabase
     .from('outings')
     .select('*')
     .ilike('city', city)
     .in('status', ['open', 'full'])
-    .gte('play_date', new Date().toISOString().split('T')[0])
+    .gte('play_date', todayStr)
     .order('play_date', { ascending: true });
   return (data ?? []) as Outing[];
 }
