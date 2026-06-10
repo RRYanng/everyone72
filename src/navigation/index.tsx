@@ -49,11 +49,13 @@ import CrewDetailScreen from '../screens/crew/CrewDetailScreen';
 import CreateCrewScreen from '../screens/crew/CreateCrewScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 
-// Buddies(搭子/约局 · Phase 2-4)
+// Buddies(搭子/约局 · Phase 2-6)
 import EditProfileExtrasScreen from '../screens/buddies/EditProfileExtrasScreen';
 import OutingsListScreen from '../screens/buddies/OutingsListScreen';
 import CreateOutingScreen from '../screens/buddies/CreateOutingScreen';
 import OutingDetailScreen from '../screens/buddies/OutingDetailScreen';
+import MyOutingsScreen from '../screens/buddies/MyOutingsScreen';
+import { BuddiesBadgeProvider, useBuddiesBadge } from '../lib/buddiesBadge';
 
 // Legal
 import PrivacyPolicyScreen from '../screens/legal/PrivacyPolicyScreen';
@@ -89,11 +91,12 @@ export type RootStackParamList = {
   CrewDetail: { crewId: string };
   CreateCrew: undefined;
   Settings: undefined;
-  // Buddies(搭子/约局 · Phase 2-4)
+  // Buddies(搭子/约局 · Phase 2-6)
+  // 注:OutingsList 现为「Buddies」底部 tab 的根屏(见 MainTabs),不再单列 RootStack 路由。
   EditProfileExtras: undefined;
-  OutingsList: undefined;
   CreateOuting: undefined;
   OutingDetail: { outingId: string };
+  MyOutings: undefined;
   // Legal
   PrivacyPolicy: undefined;
   Terms: undefined;
@@ -105,6 +108,9 @@ const Tab        = createBottomTabNavigator();
 
 // ── 底部 Tab ──────────────────────────────────────────────────
 function MainTabs() {
+  // 搭子未读红点(派生计数,非实时);聚焦该 tab 时刷新一次
+  const { count, refresh } = useBuddiesBadge();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -125,6 +131,7 @@ function MainTabs() {
             Home:     'home-outline',
             Practice: 'golf-outline',
             Crew:     'people-outline',
+            Buddies:  'calendar-outline',
             History:  'time-outline',
           };
           const name = icons[route.name] ?? 'ellipse-outline';
@@ -135,6 +142,12 @@ function MainTabs() {
       <Tab.Screen name="Home"     component={HomeScreen}      options={{ title: 'Home' }} />
       <Tab.Screen name="Practice" component={PracticeFeedScreen} options={{ title: 'Practice' }} />
       <Tab.Screen name="Crew"     component={CrewListScreen}  options={{ title: 'Crew' }} />
+      <Tab.Screen
+        name="Buddies"
+        component={OutingsListScreen}
+        options={{ title: 'Buddies', tabBarBadge: count > 0 ? count : undefined }}
+        listeners={{ focus: () => refresh() }}
+      />
       <Tab.Screen name="History"  component={HistoryScreen}   options={{ title: 'History' }} />
     </Tab.Navigator>
   );
@@ -143,6 +156,7 @@ function MainTabs() {
 // ── 已登录 Root Stack ─────────────────────────────────────────
 function AuthenticatedStack() {
   return (
+    <BuddiesBadgeProvider>
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs"        component={MainTabs} />
       {/* Phase 1 */}
@@ -157,15 +171,16 @@ function AuthenticatedStack() {
       <RootStack.Screen name="CrewDetail"      component={CrewDetailScreen} />
       <RootStack.Screen name="CreateCrew"      component={CreateCrewScreen} options={{ presentation: 'modal' }} />
       <RootStack.Screen name="Settings"        component={SettingsScreen} options={{ presentation: 'modal' }} />
-      {/* Buddies(搭子/约局) */}
+      {/* Buddies(搭子/约局) —— OutingsList 是「Buddies」tab 的根,这里不再注册 */}
       <RootStack.Screen name="EditProfileExtras" component={EditProfileExtrasScreen} options={{ presentation: 'modal' }} />
-      <RootStack.Screen name="OutingsList"       component={OutingsListScreen} />
       <RootStack.Screen name="CreateOuting"      component={CreateOutingScreen} options={{ presentation: 'modal' }} />
       <RootStack.Screen name="OutingDetail"      component={OutingDetailScreen} />
+      <RootStack.Screen name="MyOutings"         component={MyOutingsScreen} />
       {/* Legal */}
       <RootStack.Screen name="PrivacyPolicy"   component={PrivacyPolicyScreen} />
       <RootStack.Screen name="Terms"           component={TermsScreen} />
     </RootStack.Navigator>
+    </BuddiesBadgeProvider>
   );
 }
 

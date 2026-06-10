@@ -97,11 +97,25 @@ export default function OutingsListScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // 头部右侧「我的」入口(本屏是 Buddies tab 根,无返回箭头)
+  const mineAction = (
+    <Pressable
+      onPress={() => navigation.navigate('MyOutings')}
+      accessibilityRole="button"
+      accessibilityLabel="我的约局"
+      hitSlop={8}
+      style={({ pressed }) => [styles.mineBtn, pressed && styles.pressed]}
+    >
+      <Ionicons name="person-circle-outline" size={18} color={colors.koke} />
+      <Text style={styles.mineBtnText}>我的</Text>
+    </Pressable>
+  );
+
   // ── 加载中 ─────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ScreenHeader title="约局" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="约局" rightAction={mineAction} />
         <View style={styles.centerWrap}><LoadingSpinner /></View>
       </SafeAreaView>
     );
@@ -111,7 +125,7 @@ export default function OutingsListScreen() {
   if (!city) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ScreenHeader title="约局" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="约局" rightAction={mineAction} />
         <View style={styles.centerWrap}>
           <Ionicons name="location-outline" size={40} color={colors.text.hint} />
           <Text style={styles.emptyTitle}>先设置你的城市</Text>
@@ -132,7 +146,7 @@ export default function OutingsListScreen() {
   // ── 列表 ───────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title={`约局 · ${city}`} onBack={() => navigation.goBack()} />
+      <ScreenHeader title={`约局 · ${city}`} rightAction={mineAction} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -198,6 +212,10 @@ export default function OutingsListScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.washi },
   centerWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+
+  // 头部「我的」入口
+  mineBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: spacing.xs },
+  mineBtnText: { fontSize: typography.sm, color: colors.koke, fontWeight: '600' },
   content: { paddingHorizontal: spacing.base, paddingTop: spacing.md, paddingBottom: spacing.xl },
   pressed: { opacity: 0.85 },
 

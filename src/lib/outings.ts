@@ -107,3 +107,36 @@ export async function cancelOuting(outingId: string): Promise<boolean> {
     .update({ status: 'cancelled' }).eq('id', outingId);
   return !error;
 }
+
+// ── 我的(Phase 6) ───────────────────────────────────────────
+
+/** 我发起的局:含所有状态(cancelled/done 也要在"我的"里看得到),按开球日升序。 */
+export async function listMyOrganizedOutings(userId: string): Promise<Outing[]> {
+  const { data } = await supabase
+    .from('outings')
+    .select('*')
+    .eq('organizer_id', userId)
+    .order('play_date', { ascending: true });
+  return (data ?? []) as Outing[];
+}
+
+/**
+ * 我加入的局(作为参与者,排除我自己发起的 —— 那些归"我发起的")。
+ * 先查 outing_members 拿我有份的 outing_id,再查 outings。
+ */
+export async function listMyJoinedOutings(userId: string): Promise<Outing[]> {
+  const { data: rows } = await supabase
+    .from('outing_members')
+    .select('outing_id')
+    .eq('user_id', userId);
+  const ids = Array.from(new Set((rows ?? []).map((r: { outing_id: string }) => r.outing_id)));
+  if (ids.length === 0) return [];
+
+  const { data } = await supabase
+    .from('outings')
+    .select('*')
+    .in('id', ids)
+    .neq('organizer_id', userId)
+    .order('play_date', { ascending: true });
+  return (data ?? []) as Outing[];
+}
