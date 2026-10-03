@@ -1,6 +1,6 @@
 // ============================================================
 // Landing Page — SHIZUKA GOLF 日系编辑风
-// Nav · Hero(SVG 曲线+植物) · 3-col Feature Card · FEATURES · WHAT THEY SAY · Dark Footer
+// Nav · Hero · 3-col Feature Card · Features · Footer
 // ============================================================
 
 import React from 'react';
@@ -38,7 +38,6 @@ const IMAGE_OVERLAY = 'rgba(44, 42, 38, 0.10)';
 export default function LandingScreen() {
   const navigation = useNavigation<NavProp>();
   const goDemo = () => navigation.navigate('Demo');
-  const goLogin    = () => navigation.navigate('Login');
   const goPrivacy  = () => navigation.navigate('PrivacyPolicy');
   const goTerms    = () => navigation.navigate('Terms');
 
@@ -50,7 +49,7 @@ export default function LandingScreen() {
     >
       {__DEV__ ? <DevBar /> : null}
 
-      <TopNav onSignIn={goLogin} onGetStarted={goDemo} />
+      <TopNav onGetStarted={goDemo} />
       <Hero onGetStarted={goDemo} />
       <FeatureCard3Col />
       <FeaturesSection onLearnMore={goDemo} />
@@ -65,8 +64,8 @@ export default function LandingScreen() {
 
 // ── Top Nav ───────────────────────────────────────────────────
 
-function TopNav({ onSignIn, onGetStarted }: {
-  onSignIn: () => void; onGetStarted: () => void;
+function TopNav({ onGetStarted }: {
+  onGetStarted: () => void;
 }) {
   return (
     <View style={styles.nav}>
@@ -99,16 +98,7 @@ function TopNav({ onSignIn, onGetStarted }: {
 
         {/* Right side */}
         <View style={styles.navRight}>
-          {isWide ? (
-            <Pressable
-              onPress={onSignIn}
-              accessibilityRole="link"
-              accessibilityLabel="Sign in"
-              style={({ pressed }) => [styles.navIcon, pressed && styles.pressed]}
-            >
-              <Ionicons name="person-outline" size={20} color={colors.text.primary} accessible={false} />
-            </Pressable>
-          ) : null}
+
           <Pressable
             onPress={onGetStarted}
             accessibilityRole="button"
@@ -398,7 +388,7 @@ function Footer({
           ) : null}
         </View>
 
-        {/* Mobile fallback: legal + sign in inline */}
+        {/* Mobile fallback: source and legal links */}
         {!isWide ? (
           <View style={styles.footerMobileLinks}>
             <Pressable onPress={() => Linking.openURL("https://github.com/RRYanng/everyone72")} accessibilityRole="link" accessibilityLabel="GitHub">
