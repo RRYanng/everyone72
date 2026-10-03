@@ -40,6 +40,21 @@ serve(async (req: Request) => {
       );
     }
 
+    // Validate the session with Auth before spending the server-side AI key.
+    // A Bearer prefix alone does not prove that the caller is signed in.
+    const userRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+      headers: {
+        Authorization: authHeader,
+        apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      },
+    });
+    if (!userRes.ok) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: invalid auth session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // 2. Parse the request body
     const body = await req.json();
     const { prompt } = body as { prompt: string };
@@ -70,7 +85,7 @@ serve(async (req: Request) => {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 512,
         messages: [{ role: 'user', content: prompt }],
       }),

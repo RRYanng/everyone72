@@ -2,7 +2,7 @@
 
 Historical validation plan, retained for context. These phases are unscheduled and do not describe current operational status.
 
-**Status checked October 2, 2026:** the public sample demo is available, but the configured Supabase hostname does not resolve. Restoring backend access and verifying authentication, scorecard persistence, and live AI analysis is a prerequisite to any beta expansion. Current user counts and waitlist activity have not been verified.
+**Status checked October 2, 2026:** the public sample demo is available. The original paused Supabase project has resumed; DNS, Auth health, and public course reads work. The AI function has been deployed, but its server-side AI key and a successful live response remain pending. Verifying actual authentication, scorecard persistence, and live AI analysis is a prerequisite to any beta expansion. Current user counts and waitlist activity have not been verified.
 
 ---
 
@@ -13,7 +13,7 @@ Historical validation plan, retained for context. These phases are unscheduled a
 - First cohort of coach waitlist signups → qualitative interviews
 - Engagement data on the diagnostic report (which sections users actually read)
 
-**Why this phase matters:** Earlier development targeted an end-to-end workflow; the hosted account features are currently unavailable. This phase is about separating "the app technically works" from "real golfers keep coming back."
+**Why this phase matters:** Earlier development targeted an end-to-end workflow; that hosted workflow still needs verification after backend recovery. This phase is about separating "the app technically works" from "real golfers keep coming back."
 
 ---
 

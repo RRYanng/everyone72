@@ -80,7 +80,7 @@ function generateOfflineFeedback(round: Round, holeScores: HoleScore[], course: 
 
   return `${assessment} ${puttNote}${troubleNote} Best: #${bestHole.hole_number}. Toughest: #${worstHole.hole_number} (+${worstHole.strokes - worstHole.par}).
 
-⚠️ AI Coach (web preview mode) — Install on your phone for full Claude-powered analysis.`;
+⚠️ Offline fallback — Live AI analysis was unavailable. This feedback was generated locally.`;
 }
 
 // ── Main Export: analyzeRound ─────────────────────────────────────────────────

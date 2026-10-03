@@ -10,7 +10,9 @@ Checked October 2, 2026:
 
 - **Public repository:** accessible without a GitHub account.
 - **Public sample demo:** renders charts and an illustrative report without signing in. The values and report are fixed examples in [DemoScreen.tsx](src/screens/demo/DemoScreen.tsx); this page does not call Claude or read live user data.
-- **Account features:** currently unavailable. The configured Supabase hostname does not resolve. Successful sign-in, saving scorecards, retrieving user data, and generating fresh AI reports could not be verified.
+- **Backend recovery:** the original Supabase project was paused and has now resumed. Its hostname resolves, the Auth health endpoint responds, and the public courses API is readable. The hosted frontend and local configuration point to the same project.
+- **Account verification:** successful sign-in with the owner's authorized test account, saving scorecards, and retrieving that account's data remain unverified. No mock account was used as proof.
+- **Live AI:** the previously missing `analyze-round` Edge Function is now deployed. CORS preflight works and unauthenticated calls are rejected. Its server-side `ANTHROPIC_API_KEY` still needs to be configured; a successful live Claude response has not been verified. Local fallback feedback is explicitly labeled as offline.
 - **Build checks:** web export and `npm run typecheck` pass. The complete type check runs TypeScript for the frontend and Deno for the Edge Function; generated bundles are excluded from source checking.
 - **Deployment:** the web frontend is hosted on Vercel. This does not establish that the backend or the full application is operational.
 
@@ -25,7 +27,7 @@ The sample demonstrates the interface and intended report format. It is not evid
 - Practice check-ins, social feeds, golf crews, and buddy/outings screens.
 - A coach-interest waitlist flow; a working coach marketplace is not provided.
 
-These are implementation descriptions, not claims that the corresponding hosted services currently work. Live authentication, database contents, storage policies, and Edge Function deployment need to be checked after backend access is restored.
+These are implementation descriptions, not claims that every hosted workflow currently works. The complete authenticated save/read/AI workflow and Storage policies still require verification. The public sample is separate from that verification.
 
 ## Technology and architecture
 
@@ -34,7 +36,7 @@ These are implementation descriptions, not claims that the corresponding hosted 
 | Frontend | React 18, React Native 0.74, Expo SDK 51, React Native Web, TypeScript |
 | Navigation | React Navigation |
 | Backend integration | Supabase Auth, PostgreSQL, Storage, and Edge Functions |
-| AI integration | Anthropic Claude through the server-side `analyze-round` function |
+| AI integration | Claude Sonnet 4.6 through the server-side `analyze-round` function; live result pending verification |
 | Web hosting | Expo web export on Vercel |
 
 The frontend uses **Expo / React Native Web**, rather than Next.js or Vite. See [package.json](package.json), [Supabase client](src/lib/supabase.ts), [AI client](src/lib/claude.ts), and [Edge Function](supabase/functions/analyze-round/index.ts).
