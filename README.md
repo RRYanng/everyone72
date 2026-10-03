@@ -11,7 +11,7 @@ Checked October 2, 2026:
 - **Public repository:** accessible without a GitHub account.
 - **Public sample demo:** renders charts and an illustrative report without signing in. The values and report are fixed examples in [DemoScreen.tsx](src/screens/demo/DemoScreen.tsx); this page does not call Claude or read live user data.
 - **Account features:** currently unavailable. The configured Supabase hostname does not resolve. Successful sign-in, saving scorecards, retrieving user data, and generating fresh AI reports could not be verified.
-- **Build checks:** web export succeeds. The full TypeScript check currently reports pre-existing HomeScreen style errors and notification / Edge Function configuration errors; these remain outside this display audit.
+- **Build checks:** web export and `npm run typecheck` pass. The complete type check runs TypeScript for the frontend and Deno for the Edge Function; generated bundles are excluded from source checking.
 - **Deployment:** the web frontend is hosted on Vercel. This does not establish that the backend or the full application is operational.
 
 The sample demonstrates the interface and intended report format. It is not evidence of live AI output, current active users, or validated improvements in golf performance.
@@ -70,9 +70,14 @@ Use your own reachable Supabase project. Even the frontend sample currently requ
 For account and AI functionality, the SQL files under [`supabase/`](supabase/) describe the schema and later changes. They are not a tested one-command provisioning process. Review the schema changes, configure Auth and Storage, and deploy the Edge Function to your own project. Store `ANTHROPIC_API_KEY` as a **server-side Edge Function secret**; never put it in `EXPO_PUBLIC_*` variables or the client bundle.
 
 ```bash
+# Check all TypeScript source with the appropriate runtime
+npm run typecheck
+
 # Export the web frontend
 npm run build:web
 ```
+
+The Deno checker is installed as a development dependency. `deno.edge.json` and `deno.edge.lock` configure the local backend check; they do not change the deployed Edge Function or its authentication configuration.
 
 Do not commit `.env`, service-role keys, or AI API credentials. Current hosted backend credentials and project administration are not included in this repository.
 

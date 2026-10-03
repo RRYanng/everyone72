@@ -707,6 +707,24 @@ const styles = StyleSheet.create({
   streakBadges: { flexDirection: 'row', gap: spacing.xs },
   streakBadge: { fontSize: typography.base },
 
+  // ── Existing draft recovery / connection error banners
+  draftBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.washi, borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.kincha, borderRadius: radius.md,
+    padding: spacing.base, marginBottom: spacing.md,
+  },
+  draftBannerContent: { flex: 1 },
+  draftBannerTitle: { fontSize: typography.sm, fontWeight: '600', color: colors.text.primary },
+  draftBannerSub: { fontSize: typography.xs, color: colors.text.secondary, marginTop: spacing.xs },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.washi, borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.aka, borderRadius: radius.md,
+    padding: spacing.base, marginBottom: spacing.md,
+  },
+  errorBannerTitle: { fontSize: typography.sm, fontWeight: '600', color: colors.aka },
+
   // ── Start New Round
   startBtn: {
     height: 56,
