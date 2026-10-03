@@ -20,6 +20,7 @@ import { LoadingSpinner } from '../../components';
 import { Round, PracticePlan, UserStats } from '../../types';
 import { getUserStats } from '../../lib/streak';
 import { stripMarkdown } from '../../lib/stripMarkdown';
+import { isOfflineContent } from '../../lib/analysisSource';
 import {
   isDevMockActive,
   MOCK_PROFILE, MOCK_ROUNDS, MOCK_ACTIVE_PLAN, MOCK_USER_STATS,
@@ -324,7 +325,9 @@ export default function HomeScreen() {
                   This Week's Practice Plan
                 </Text>
                 <View style={styles.aiBadge} accessible={false}>
-                  <Text style={styles.aiBadgeText}>AI</Text>
+                  <Text style={styles.aiBadgeText}>
+                    {isOfflineContent(activePlan.plan_text) ? 'Offline' : 'AI'}
+                  </Text>
                 </View>
               </View>
               {splitPlanIntoLines(activePlan.plan_text).map((line, i) => (

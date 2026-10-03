@@ -97,7 +97,7 @@ export async function analyzeRound(
     body: { prompt },
   });
 
-  if (error) {
+  if (error || typeof data?.analysis !== 'string' || !data.analysis.trim()) {
     console.error('[Claude] Edge Function error:', error);
     // 降级到本地分析
     console.warn('[Claude] Falling back to offline analysis');
@@ -165,7 +165,7 @@ Keep each day's instruction to 1-2 sentences. Be specific with numbers (minutes,
     body: { prompt },
   });
 
-  if (error || !data) {
+  if (error || typeof data?.analysis !== 'string' || !data.analysis.trim()) {
     console.warn('[Claude] Practice plan generation failed, using fallback');
     return generateOfflinePracticePlan(round, holeScores);
   }
@@ -189,7 +189,9 @@ function generateOfflinePracticePlan(round: Round, holeScores: HoleScore[]): str
 **Sat** — Pre-round warmup: 5 min stretch, 10 putts, 10 chips, 5 full swings.
 **Sun** — On-course goal: max 2 putts per green, no penalty shots.
 
-**💡 Key Tip:** ${needsPutting ? 'For lag putting, focus on distance first — direction follows when speed is right.' : 'Start your downswing with your hips, not your hands.'}`;
+**💡 Key Tip:** ${needsPutting ? 'For lag putting, focus on distance first — direction follows when speed is right.' : 'Start your downswing with your hips, not your hands.'}
+
+⚠️ Offline fallback — Live plan generation was unavailable. This practice plan was generated locally.`;
 }
 
 // ── generateDiagnosisReport ───────────────────────────────────────────────────

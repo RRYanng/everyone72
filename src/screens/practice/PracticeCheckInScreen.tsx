@@ -326,13 +326,13 @@ export default function PracticeCheckInScreen() {
           style={[styles.planToggle, followingPlan && styles.planToggleActive]}
           onPress={() => setFollowingPlan(p => !p)}
         >
-          <Text style={styles.planToggleEmoji}>🤖</Text>
+          <Text style={styles.planToggleEmoji}>📋</Text>
           <View style={{ flex: 1 }}>
             <Text style={[styles.planToggleLabel, followingPlan && styles.planToggleLabelActive]}>
-              I'm following my AI practice plan ✅
+              I'm following my practice plan ✅
             </Text>
             <Text style={styles.planToggleSub}>
-              Tap to mark this session as part of your AI-recommended plan
+              Tap to mark this session as part of your practice plan
             </Text>
           </View>
           <View style={[styles.planToggleCheck, followingPlan && styles.planToggleCheckActive]}>

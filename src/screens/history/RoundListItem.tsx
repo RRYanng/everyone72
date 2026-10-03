@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Round } from '../../types';
 import { Card, ScoreBadge } from '../../components';
 import { colors, radius, spacing, typography } from '../../theme';
+import { isOfflineContent } from '../../lib/analysisSource';
 
 interface Props {
   round: Round;
@@ -13,7 +14,8 @@ interface Props {
 export function RoundListItem({ round, onPress }: Props) {
   const course = (round as any).courses;
   const courseName = course?.name ?? 'Unknown Course';
-  const totalPar = course?.total_par ?? (round.total_strokes - round.score_vs_par);
+  // The round may cover only nine holes; the course's par covers all 18.
+  const totalPar = round.total_strokes - round.score_vs_par;
   const dateStr = new Date(round.created_at).toLocaleDateString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
   });
@@ -43,7 +45,9 @@ export function RoundListItem({ round, onPress }: Props) {
             {round.ai_feedback ? (
               <View style={styles.aiBadge} accessible={false}>
                 <Ionicons name="analytics" size={10} color={colors.koke} />
-                <Text style={styles.aiBadgeText}>AI Analysis</Text>
+                <Text style={styles.aiBadgeText}>
+                  {isOfflineContent(round.ai_feedback) ? 'Offline Feedback' : 'AI Analysis'}
+                </Text>
               </View>
             ) : null}
           </View>

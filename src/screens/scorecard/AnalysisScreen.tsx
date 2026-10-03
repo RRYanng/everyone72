@@ -15,6 +15,7 @@ import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 
 import { supabase } from '../../lib/supabase';
 import { analyzeRound, generatePracticePlan } from '../../lib/claude';
+import { isOfflineContent } from '../../lib/analysisSource';
 import { Round, HoleScore, Course, PracticePlan } from '../../types';
 import { COURSES } from '../../data/courses';
 import { RootStackParamList } from '../../navigation';
@@ -172,8 +173,8 @@ export default function AnalysisScreen() {
     setCourse(foundCourse);
     setLoadingData(false);
 
-    // 如果已有分析结果，直接显示（带渐显动画）
-    if (roundData.ai_feedback) {
+    // Reuse live results, but retry saved local fallback after backend recovery.
+    if (roundData.ai_feedback && !isOfflineContent(roundData.ai_feedback)) {
       setFeedback(roundData.ai_feedback);
       Animated.parallel([
         Animated.timing(feedbackOpacity, { toValue: 1, duration: 500, delay: 200, useNativeDriver: true }),
@@ -318,9 +319,13 @@ export default function AnalysisScreen() {
         <Card style={styles.aiCard}>
           <View style={styles.aiHeader}>
             <Ionicons name="analytics-outline" size={18} color={colors.koke} />
-            <Text style={styles.aiTitle}>AI Coach Feedback</Text>
+            <Text style={styles.aiTitle}>
+              {isOfflineContent(feedback) ? 'Offline Round Feedback' : feedback && !feedback.startsWith('Unable to') ? 'AI Coach Feedback' : 'Round Feedback'}
+            </Text>
             <View style={styles.aiBadge}>
-              <Text style={styles.aiBadgeText}>Claude</Text>
+              <Text style={styles.aiBadgeText}>
+                {isOfflineContent(feedback) ? 'Local' : feedback && !feedback.startsWith('Unable to') ? 'Claude' : 'Pending'}
+              </Text>
             </View>
           </View>
 
