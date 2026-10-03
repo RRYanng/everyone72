@@ -5,7 +5,7 @@
 
 import React from 'react';
 import {
-  View, Text, Pressable, Image, StyleSheet, ScrollView, Dimensions,
+  View, Text, Pressable, Image, StyleSheet, ScrollView, Dimensions, Linking,
 } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,7 +37,7 @@ const IMAGE_OVERLAY = 'rgba(44, 42, 38, 0.10)';
 
 export default function LandingScreen() {
   const navigation = useNavigation<NavProp>();
-  const goRegister = () => navigation.navigate('Register');
+  const goDemo = () => navigation.navigate('Demo');
   const goLogin    = () => navigation.navigate('Login');
   const goPrivacy  = () => navigation.navigate('PrivacyPolicy');
   const goTerms    = () => navigation.navigate('Terms');
@@ -50,13 +50,12 @@ export default function LandingScreen() {
     >
       {__DEV__ ? <DevBar /> : null}
 
-      <TopNav onSignIn={goLogin} onGetStarted={goRegister} />
-      <Hero onGetStarted={goRegister} />
+      <TopNav onSignIn={goLogin} onGetStarted={goDemo} />
+      <Hero onGetStarted={goDemo} />
       <FeatureCard3Col />
-      <FeaturesSection onLearnMore={goRegister} />
-      <WhatTheySay onSeeAll={goRegister} />
+      <FeaturesSection onLearnMore={goDemo} />
       <Footer
-        onSignIn={goLogin}
+        onDemo={goDemo}
         onPrivacy={goPrivacy}
         onTerms={goTerms}
       />
@@ -84,9 +83,10 @@ function TopNav({ onSignIn, onGetStarted }: {
         {/* Center links (wide only) */}
         {isWide ? (
           <View style={styles.navLinks}>
-            {['Home', 'Features', 'How It Works', 'About'].map(label => (
+            {['GitHub'].map(label => (
               <Pressable
                 key={label}
+                onPress={() => Linking.openURL('https://github.com/RRYanng/everyone72')}
                 accessibilityRole="link"
                 accessibilityLabel={label}
                 style={({ pressed }) => [styles.navLinkWrap, pressed && styles.pressed]}
@@ -112,16 +112,12 @@ function TopNav({ onSignIn, onGetStarted }: {
           <Pressable
             onPress={onGetStarted}
             accessibilityRole="button"
-            accessibilityLabel="Get Started"
+            accessibilityLabel="View sample demo"
             style={({ pressed }) => [styles.navCta, pressed && styles.pressed]}
           >
-            <Text style={styles.navCtaText}>Get Started</Text>
+            <Text style={styles.navCtaText}>Sample demo</Text>
           </Pressable>
-          {!isWide ? (
-            <View style={styles.hamburger} accessible={false}>
-              <Ionicons name="menu-outline" size={26} color={colors.text.primary} />
-            </View>
-          ) : null}
+
         </View>
       </View>
     </View>
@@ -187,18 +183,19 @@ function Hero({ onGetStarted }: { onGetStarted: () => void }) {
             Your pocket{'\n'}golf coach.
           </Text>
           <Text style={styles.heroSubtitle}>
-            Most golfers practice more but improve less. Everyone72 analyzes every round to tell you exactly what's holding you back.
+            Explore the golf coaching prototype through fixed sample scorecards, charts, and an illustrative diagnosis report.
           </Text>
           <Pressable
             onPress={onGetStarted}
             accessibilityRole="button"
-            accessibilityLabel="Get your free diagnosis"
-            accessibilityHint="Create a free account"
+            accessibilityLabel="View sample demo"
+            accessibilityHint="Open the public sample without signing in"
             style={({ pressed }) => [styles.heroCta, pressed && styles.pressed]}
           >
-            <Text style={styles.heroCtaText}>Get your free diagnosis</Text>
+            <Text style={styles.heroCtaText}>View sample demo</Text>
             <Ionicons name="arrow-forward" size={18} color={colors.shiro} accessible={false} />
           </Pressable>
+          <Text style={styles.sectionDesc}>Public sample demo available. Sign-in and account features are currently unavailable.</Text>
         </View>
 
         {/* Mobile: real image below text */}
@@ -246,11 +243,11 @@ function PlantSprig() {
 
 const FEATURE_ICONS: { icon: IconName; title: string; desc: string }[] = [
   { icon: 'sparkles-outline',      title: 'AI Diagnosis',
-    desc: "Know exactly why your score isn't improving." },
+    desc: "Explore a sample diagnosis report." },
   { icon: 'clipboard-outline',     title: 'Practice Plans',
-    desc: 'A weekly drill schedule built for your game.' },
+    desc: 'See an illustrative weekly drill schedule.' },
   { icon: 'trending-up-outline',   title: 'Track Progress',
-    desc: 'See your improvement round by round.' },
+    desc: 'Compare charts from fixed sample rounds.' },
 ];
 
 function FeatureCard3Col() {
@@ -295,10 +292,10 @@ function FeaturesSection({ onLearnMore }: { onLearnMore: () => void }) {
           <View style={styles.featuresLeft}>
             <SectionLabel>FEATURES</SectionLabel>
             <Text style={styles.sectionTitle} accessibilityRole="header">
-              Everything your coach{'\n'}would tell you.
+              Explore the{'\n'}coaching workflow.
             </Text>
             <Text style={styles.sectionDesc}>
-              From stroke patterns to putting habits, Everyone72 analyzes the data most golfers never see.
+              View the intended report format, from scoring patterns to putting habits. The public demo uses fixed examples rather than a live AI request.
             </Text>
             <Pressable
               onPress={onLearnMore}
@@ -331,6 +328,7 @@ function FeaturesSection({ onLearnMore }: { onLearnMore: () => void }) {
               />
               <View style={[StyleSheet.absoluteFill, styles.imageOverlay]} />
               <Pressable
+                onPress={onLearnMore}
                 accessibilityRole="button"
                 accessibilityLabel="Learn more"
                 style={({ pressed }) => [styles.arrowBtn, pressed && styles.pressed]}
@@ -345,99 +343,21 @@ function FeaturesSection({ onLearnMore }: { onLearnMore: () => void }) {
   );
 }
 
-// ── WHAT THEY SAY ─────────────────────────────────────────────
-
-const REVIEWS = [
-  { date: '2026.04.01', category: 'Handicap Drop',
-    text: 'Dropped from 18 to 14 in 8 weeks using the AI practice plan.' },
-  { date: '2026.03.15', category: 'Course Management',
-    text: 'Finally understood why I kept losing strokes on Par 4s.' },
-  { date: '2026.03.01', category: 'Putting',
-    text: 'Cut my 3-putts in half after following the weekly drill plan.' },
-];
-
-function WhatTheySay({ onSeeAll }: { onSeeAll: () => void }) {
-  return (
-    <View style={styles.sectionOuter}>
-      <View style={styles.sectionInner}>
-        <View style={styles.whatHeader}>
-          <View style={styles.whatHeaderLeft}>
-            <SectionLabel>WHAT THEY SAY</SectionLabel>
-            <Text style={styles.whatTitle} accessibilityRole="header">
-              What our golfers say
-            </Text>
-          </View>
-          <Pressable
-            onPress={onSeeAll}
-            accessibilityRole="link"
-            accessibilityLabel="See all reviews"
-            style={({ pressed }) => [styles.textLink, pressed && styles.pressed]}
-          >
-            <Text style={styles.textLinkLabel}>See all reviews →</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.reviewList}>
-          {REVIEWS.map((r, i) => (
-            <ReviewRow key={r.date} {...r} first={i === 0} />
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function ReviewRow({
-  date, category, text, first,
-}: { date: string; category: string; text: string; first: boolean }) {
-  return (
-    <View
-      style={[styles.reviewRow, first && styles.reviewRowFirst]}
-      accessible
-      accessibilityLabel={`${date}, ${category}. ${text}`}
-    >
-      <View style={styles.reviewPills}>
-        <Pill>{date}</Pill>
-        <Pill>{category}</Pill>
-      </View>
-      <Text style={styles.reviewText} numberOfLines={isWide ? 1 : 2}>
-        {text}
-      </Text>
-      <Ionicons
-        name="arrow-forward"
-        size={18}
-        color={colors.text.hint}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
-    </View>
-  );
-}
-
-function Pill({ children }: { children: string }) {
-  return (
-    <View style={styles.pill}>
-      <Text style={styles.pillText}>{children}</Text>
-    </View>
-  );
-}
-
 // ── Footer (dark) ─────────────────────────────────────────────
 
 const FOOTER_LINKS = {
-  Product: ['Features', 'How It Works', 'Pricing', 'Download'],
-  Company: ['About', 'Blog', 'Careers', 'Press'],
+  Project: ['Sample demo', 'GitHub'],
   Legal:   ['Privacy Policy', 'Terms of Service'],
 };
 
 function Footer({
-  onSignIn, onPrivacy, onTerms,
-}: { onSignIn: () => void; onPrivacy: () => void; onTerms: () => void }) {
+  onDemo, onPrivacy, onTerms,
+}: { onDemo: () => void; onPrivacy: () => void; onTerms: () => void }) {
   const linkPress = (label: string) => {
     if (label === 'Privacy Policy') return onPrivacy;
     if (label === 'Terms of Service') return onTerms;
-    if (label === 'Sign in' || label === 'About') return onSignIn;
-    return () => {};
+    if (label === 'Sample demo') return onDemo;
+    return () => Linking.openURL('https://github.com/RRYanng/everyone72');
   };
 
   return (
@@ -451,11 +371,7 @@ function Footer({
               <Text style={styles.footerBrandText}>Everyone 72</Text>
             </View>
             <Text style={styles.footerTagline}>Your pocket golf coach.</Text>
-            <View style={styles.socialRow}>
-              <SocialIcon name="logo-instagram" label="Instagram" />
-              <SocialIcon name="logo-twitter"   label="Twitter" />
-              <SocialIcon name="logo-facebook"  label="Facebook" />
-            </View>
+
           </View>
 
           {/* Link columns (wide only) */}
@@ -477,11 +393,7 @@ function Footer({
                   ))}
                 </View>
               ))}
-              {/* 4th column: placeholder / contact */}
-              <View style={styles.footerCol}>
-                <Text style={styles.footerColTitle}>Contact</Text>
-                <Text style={styles.footerLink}>hello@everyone72.app</Text>
-              </View>
+
             </View>
           ) : null}
         </View>
@@ -489,8 +401,8 @@ function Footer({
         {/* Mobile fallback: legal + sign in inline */}
         {!isWide ? (
           <View style={styles.footerMobileLinks}>
-            <Pressable onPress={onSignIn} accessibilityRole="link" accessibilityLabel="Sign in">
-              <Text style={styles.footerLink}>Sign in</Text>
+            <Pressable onPress={() => Linking.openURL("https://github.com/RRYanng/everyone72")} accessibilityRole="link" accessibilityLabel="GitHub">
+              <Text style={styles.footerLink}>GitHub</Text>
             </Pressable>
             <Text style={styles.footerDot} accessible={false}>·</Text>
             <Pressable onPress={onPrivacy} accessibilityRole="link" accessibilityLabel="Privacy">
@@ -508,18 +420,6 @@ function Footer({
         </View>
       </View>
     </View>
-  );
-}
-
-function SocialIcon({ name, label }: { name: IconName; label: string }) {
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={label}
-      style={({ pressed }) => [styles.socialIcon, pressed && styles.pressed]}
-    >
-      <Ionicons name={name} size={18} color={colors.text.secondary} accessible={false} />
-    </Pressable>
   );
 }
 

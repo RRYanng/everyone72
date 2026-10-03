@@ -1,21 +1,23 @@
 # Everyone 72 — Roadmap
 
-A lightweight public roadmap. Not a wishlist — each phase has exit criteria and a decision on what to do next.
+Historical validation plan, retained for context. These phases are unscheduled and do not describe current operational status.
+
+**Status checked October 2, 2026:** the public sample demo is available, but the configured Supabase hostname does not resolve. Restoring backend access and verifying authentication, scorecard persistence, and live AI analysis is a prerequisite to any beta expansion. Current user counts and waitlist activity have not been verified.
 
 ---
 
-## Current Phase: Early Validation
+## Archived Plan: Early Validation
 
 **What "done" looks like for this phase:**
-- Active beta tester group of 20+ regular users (currently fewer)
+- Active beta tester group of 20+ regular users (historical target; current count unverified)
 - First cohort of coach waitlist signups → qualitative interviews
 - Engagement data on the diagnostic report (which sections users actually read)
 
-**Why this phase matters:** Everyone 72 has shipped end-to-end, but that's not the same as having product-market fit. This phase is about separating "the app technically works" from "real golfers keep coming back."
+**Why this phase matters:** Earlier development targeted an end-to-end workflow; the hosted account features are currently unavailable. This phase is about separating "the app technically works" from "real golfers keep coming back."
 
 ---
 
-## Phase 1 — Expand and Instrument (next 30 days)
+## Phase 1 — Expand and Instrument (unscheduled)
 
 **Focus:** More users + better data on what's working.
 
@@ -30,7 +32,7 @@ A lightweight public roadmap. Not a wishlist — each phase has exit criteria an
 
 ---
 
-## Phase 2 — Validate the Referral Model (60–90 days)
+## Phase 2 — Validate the Referral Model (unscheduled)
 
 **Focus:** Does AI diagnosis → coach referral actually convert?
 
@@ -44,7 +46,7 @@ A lightweight public roadmap. Not a wishlist — each phase has exit criteria an
 
 ---
 
-## Phase 3 — Decision Point (90+ days)
+## Phase 3 — Decision Point (unscheduled)
 
 **Focus:** Scale, pivot, or pause.
 
@@ -75,7 +77,7 @@ Only actionable after Phase 2 shows the core model works:
 ## Kill Criteria
 
 This project stops active development if:
-- After 90 days, no user logs 3+ rounds
+- After a future 90-day validation period, no user logs 3+ rounds
 - Coach waitlist conversion is 0% at a statistically meaningful sample (e.g., 50+ diagnostic views → 0 signups)
 - The diagnostic report, when instrumented, shows <30% of users read past the first section
 
@@ -83,4 +85,4 @@ Public projects shouldn't quietly die. If any of the above hits, this doc will s
 
 ---
 
-*Last updated: April 18, 2026 · [Ruiyi (Alan) Yang](https://github.com/RRYanng)*
+*Availability note updated: October 2, 2026; original plan: April 18, 2026 · [Ruiyi (Alan) Yang](https://github.com/RRYanng)*

@@ -97,7 +97,7 @@ const SECTIONS: Section[] = [
     body:
       'If you have questions about this Privacy Policy, contact us at:\n\n' +
       'Email: ruiyiyanng@gmail.com\n' +
-      'Website: https://everyone72.com',
+      'Website: https://everyone72.vercel.app',
   },
 ];
 
