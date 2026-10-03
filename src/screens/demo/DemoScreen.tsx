@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Dimensions,
   Linking,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -46,6 +47,11 @@ const DIAGNOSIS_TITLES: Record<keyof typeof SECTION_COLORS, string> = {
 
 export default function DemoScreen() {
   const navigation = useNavigation<NavProp>();
+  const { width: viewportWidth } = useWindowDimensions();
+  const wideCharts = viewportWidth > 768;
+  const contentWidth = viewportWidth - (isWide ? 160 : 40);
+  const cardWidth = wideCharts ? (contentWidth - 16) / 2 : contentWidth;
+  const chartWidth = Math.max(120, cardWidth - 32);
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
@@ -97,11 +103,11 @@ export default function DemoScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTag}>DATA VISUALIZATION</Text>
         <Text style={styles.sectionTitle}>5 sample rounds. An illustrative pattern.</Text>
-        <View style={isWide ? styles.chartGrid : undefined}>
-          <ScoreTrendChart />
-          <TroubleBreakdownChart />
-          <ParTypeRadarChart />
-          <PuttingPieChart />
+        <View style={wideCharts ? styles.chartGrid : undefined}>
+          <View style={{ width: cardWidth }}><ScoreTrendChart width={chartWidth} /></View>
+          <View style={{ width: cardWidth }}><TroubleBreakdownChart width={chartWidth} /></View>
+          <View style={{ width: cardWidth }}><ParTypeRadarChart width={chartWidth} /></View>
+          <View style={{ width: cardWidth }}><PuttingPieChart width={chartWidth} /></View>
         </View>
       </View>
 
