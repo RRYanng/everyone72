@@ -49,7 +49,7 @@ export default function DemoScreen() {
   const navigation = useNavigation<NavProp>();
   const { width: viewportWidth } = useWindowDimensions();
   const wideCharts = viewportWidth > 768;
-  const contentWidth = viewportWidth - (isWide ? 160 : 40);
+  const [contentWidth, setContentWidth] = React.useState(viewportWidth - (isWide ? 160 : 40));
   const cardWidth = wideCharts ? (contentWidth - 16) / 2 : contentWidth;
   const chartWidth = Math.max(120, cardWidth - 32);
 
@@ -103,7 +103,10 @@ export default function DemoScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTag}>DATA VISUALIZATION</Text>
         <Text style={styles.sectionTitle}>5 sample rounds. An illustrative pattern.</Text>
-        <View style={wideCharts ? styles.chartGrid : undefined}>
+        <View
+          style={wideCharts ? styles.chartGrid : undefined}
+          onLayout={({ nativeEvent }) => setContentWidth(nativeEvent.layout.width)}
+        >
           <View style={{ width: cardWidth }}><ScoreTrendChart width={chartWidth} /></View>
           <View style={{ width: cardWidth }}><TroubleBreakdownChart width={chartWidth} /></View>
           <View style={{ width: cardWidth }}><ParTypeRadarChart width={chartWidth} /></View>
