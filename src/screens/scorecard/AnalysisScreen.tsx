@@ -16,7 +16,7 @@ import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 import { supabase } from '../../lib/supabase';
 import { analyzeRound, generatePracticePlan } from '../../lib/claude';
 import { isOfflineContent } from '../../lib/analysisSource';
-import { hasIncorrectParStreakCount } from '../../lib/parStreak';
+import { hasIncorrectRoundFactCount } from '../../lib/parStreak';
 import { Round, HoleScore, Course, PracticePlan } from '../../types';
 import { COURSES } from '../../data/courses';
 import { RootStackParamList } from '../../navigation';
@@ -176,7 +176,7 @@ export default function AnalysisScreen() {
 
     // Retry local fallback or a cached result whose par-streak count is wrong.
     if (roundData.ai_feedback && !isOfflineContent(roundData.ai_feedback)
-      && !hasIncorrectParStreakCount(roundData.ai_feedback, holesData || [])) {
+      && !hasIncorrectRoundFactCount(roundData.ai_feedback, holesData || [])) {
       setFeedback(roundData.ai_feedback);
       Animated.parallel([
         Animated.timing(feedbackOpacity, { toValue: 1, duration: 500, delay: 200, useNativeDriver: true }),

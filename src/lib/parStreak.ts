@@ -35,3 +35,28 @@ export function correctParStreakCounts(text: string, holes: HoleScore[]): string
 export function hasIncorrectParStreakCount(text: string, holes: HoleScore[]): boolean {
   return correctParStreakCounts(text, holes) !== text;
 }
+
+export function getPuttingFacts(holes: HoleScore[]) {
+  const twoPuttHoles = holes.filter(hole => hole.putts === 2).length;
+  return {
+    twoPuttHoles,
+    twoPuttStrokes: twoPuttHoles * 2,
+    totalPutts: holes.reduce((total, hole) => total + hole.putts, 0),
+  };
+}
+
+export function correctRoundFactCounts(text: string, holes: HoleScore[]): string {
+  const putting = getPuttingFacts(holes);
+  // Check the paired numeric putting claim observed in the real smoke test:
+  // "36 of your 37 putts were clean two-putters" actually describes 34 putts
+  // on 17 two-putt holes. Preserve coaching and prescribed drill counts.
+  const pairedClaim = /\b(\d+) of (?:your )?(\d+) putts\b([^.!?\n]*\btwo[- ]putters?\b)/gi;
+  return correctParStreakCounts(text, holes).replace(pairedClaim, (claim, part, total, suffix) => {
+    if (Number(part) === putting.twoPuttStrokes && Number(total) === putting.totalPutts) return claim;
+    return `${putting.twoPuttStrokes} of your ${putting.totalPutts} putts${suffix}`;
+  });
+}
+
+export function hasIncorrectRoundFactCount(text: string, holes: HoleScore[]): boolean {
+  return correctRoundFactCounts(text, holes) !== text;
+}

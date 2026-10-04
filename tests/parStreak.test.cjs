@@ -43,6 +43,17 @@ test('corrects both observed false claims without changing scores, putts or dril
   assert.equal(facts.correctParStreakCounts('eight consecutive pars', holes), 'eight consecutive pars');
 });
 
+test('putting facts distinguish two-putt holes from their actual putt total', () => {
+  const fullRound = Array.from({ length: 18 }, (_, i) => ({ hole_number: i + 1,
+    par: 4, strokes: i === 17 ? 5 : 4, putts: i === 17 ? 3 : 2 }));
+  const bad = '17 consecutive pars. 36 of your 37 putts were clean two-putters. Practice 36 putts.';
+  const fixed = '17 consecutive pars. 34 of your 37 putts were clean two-putters. Practice 36 putts.';
+  assert.deepEqual(facts.getPuttingFacts(fullRound), { twoPuttHoles: 17, twoPuttStrokes: 34, totalPutts: 37 });
+  assert.equal(facts.correctRoundFactCounts(bad, fullRound), fixed);
+  assert.equal(facts.hasIncorrectRoundFactCount(bad, fullRound), true);
+  assert.equal(facts.hasIncorrectRoundFactCount(fixed, fullRound), false);
+});
+
 test('prompt provides partial-round facts and provider output is checked before saving', async () => {
   let request;
   const client = loadSource('src/lib/claude.ts', {

@@ -11,13 +11,14 @@
 
 import { supabase } from './supabase';
 import { Round, HoleScore, Course, TroubleStats } from '../types';
-import { getLongestParStreak, correctParStreakCounts } from './parStreak';
+import { getLongestParStreak, getPuttingFacts, correctRoundFactCounts } from './parStreak';
 
 // ── Prompt Builder ────────────────────────────────────────────────────────────
 export function buildPrompt(round: Round, holeScores: HoleScore[], course: Course): string {
   const parStreak = getLongestParStreak(holeScores);
   const playedPar = holeScores.reduce((total, hole) => total + hole.par, 0);
   const parCount = holeScores.filter(hole => hole.strokes === hole.par).length;
+  const puttingFacts = getPuttingFacts(holeScores);
   const scoreTable = holeScores
     .map(h => {
       const troubles = h.troubles?.length ? h.troubles.join(', ') : '—';
@@ -45,6 +46,7 @@ export function buildPrompt(round: Round, holeScores: HoleScore[], course: Cours
 ## Verified Scorecard Facts
 - Holes played: ${holeScores.length}; played-hole par: ${playedPar}. The full-course par above is not the par for a partial round.
 - Total par holes: ${parCount}.
+- Putting totals: ${puttingFacts.totalPutts} putts; ${puttingFacts.twoPuttHoles} two-putt holes used exactly ${puttingFacts.twoPuttStrokes} putts. Hole counts and putt counts are different quantities.
 - Longest par streak: ${parStreak.length} consecutive pars${parStreak.length ? ` (holes #${parStreak.start} through #${parStreak.end}, inclusive)` : ''}.
 - These counts are computed from the scorecard. Use them exactly; do not estimate or recount them. Any par-streak claim must refer to this longest streak and use its exact count and hole range.
 
@@ -115,7 +117,7 @@ export async function analyzeRound(
   }
 
   console.log('[Claude] Analysis received successfully');
-  return correctParStreakCounts((data as { analysis: string }).analysis, holeScores);
+  return correctRoundFactCounts((data as { analysis: string }).analysis, holeScores);
 }
 
 // ── generatePracticePlan ──────────────────────────────────────────────────────
