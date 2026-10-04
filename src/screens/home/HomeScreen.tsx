@@ -2,11 +2,11 @@
 // 首页 — Golf Journal 风格（编辑式 + 水彩插画）
 // ============================================================
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, {
@@ -74,7 +74,7 @@ export default function HomeScreen() {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [draftInfo, setDraftInfo] = useState<ScorecardDraft | null>(null);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (user) {
       fetchProfile();
       fetchRecentRounds();
@@ -83,7 +83,7 @@ export default function HomeScreen() {
     }
     // Check for unfinished draft
     findAnyDraft().then(d => setDraftInfo(d));
-  }, [user]);
+  }, [user]));
 
   const fetchProfile = async () => {
     if (isDevMockActive()) {

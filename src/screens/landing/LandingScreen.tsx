@@ -49,7 +49,7 @@ export default function LandingScreen() {
     >
       {__DEV__ ? <DevBar /> : null}
 
-      <TopNav onGetStarted={goDemo} />
+      <TopNav onGetStarted={goDemo} onSignIn={() => navigation.navigate('Login')} />
       <Hero onGetStarted={goDemo} />
       <FeatureCard3Col />
       <FeaturesSection onLearnMore={goDemo} />
@@ -64,8 +64,9 @@ export default function LandingScreen() {
 
 // ── Top Nav ───────────────────────────────────────────────────
 
-function TopNav({ onGetStarted }: {
+function TopNav({ onGetStarted, onSignIn }: {
   onGetStarted: () => void;
+  onSignIn: () => void;
 }) {
   return (
     <View style={styles.nav}>
@@ -98,7 +99,14 @@ function TopNav({ onGetStarted }: {
 
         {/* Right side */}
         <View style={styles.navRight}>
-
+          <Pressable
+            onPress={onSignIn}
+            accessibilityRole="button"
+            accessibilityLabel="Sign In"
+            style={({ pressed }) => [styles.navLinkWrap, pressed && styles.pressed]}
+          >
+            <Text style={styles.navLinkText}>Sign In</Text>
+          </Pressable>
           <Pressable
             onPress={onGetStarted}
             accessibilityRole="button"
@@ -185,7 +193,7 @@ function Hero({ onGetStarted }: { onGetStarted: () => void }) {
             <Text style={styles.heroCtaText}>View sample demo</Text>
             <Ionicons name="arrow-forward" size={18} color={colors.shiro} accessible={false} />
           </Pressable>
-          <Text style={styles.sectionDesc}>Public sample demo available. Sign-in and account features are currently unavailable.</Text>
+          <Text style={styles.sectionDesc}>Sign in to save and review your rounds with live AI analysis. If live AI is unavailable, local feedback is labeled offline. The public demo uses fixed samples.</Text>
         </View>
 
         {/* Mobile: real image below text */}

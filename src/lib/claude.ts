@@ -11,9 +11,13 @@
 
 import { supabase } from './supabase';
 import { Round, HoleScore, Course, TroubleStats } from '../types';
+import { getLongestParStreak, correctParStreakCounts } from './parStreak';
 
 // ── Prompt Builder ────────────────────────────────────────────────────────────
 export function buildPrompt(round: Round, holeScores: HoleScore[], course: Course): string {
+  const parStreak = getLongestParStreak(holeScores);
+  const playedPar = holeScores.reduce((total, hole) => total + hole.par, 0);
+  const parCount = holeScores.filter(hole => hole.strokes === hole.par).length;
   const scoreTable = holeScores
     .map(h => {
       const troubles = h.troubles?.length ? h.troubles.join(', ') : '—';
@@ -37,6 +41,12 @@ export function buildPrompt(round: Round, holeScores: HoleScore[], course: Cours
 ## Course Info
 - Course: ${course.name}, ${course.city}, ${course.state}
 - Rating: ${course.course_rating} / Slope: ${course.slope_rating} / Par: ${course.total_par}
+
+## Verified Scorecard Facts
+- Holes played: ${holeScores.length}; played-hole par: ${playedPar}. The full-course par above is not the par for a partial round.
+- Total par holes: ${parCount}.
+- Longest par streak: ${parStreak.length} consecutive pars${parStreak.length ? ` (holes #${parStreak.start} through #${parStreak.end}, inclusive)` : ''}.
+- These counts are computed from the scorecard. Use them exactly; do not estimate or recount them. Any par-streak claim must refer to this longest streak and use its exact count and hole range.
 
 ## Scorecard
 | Hole | Par | Strokes | Putts | vs Par | Trouble |
@@ -105,7 +115,7 @@ export async function analyzeRound(
   }
 
   console.log('[Claude] Analysis received successfully');
-  return (data as { analysis: string }).analysis;
+  return correctParStreakCounts((data as { analysis: string }).analysis, holeScores);
 }
 
 // ── generatePracticePlan ──────────────────────────────────────────────────────
