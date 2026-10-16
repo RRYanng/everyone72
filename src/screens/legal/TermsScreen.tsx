@@ -88,7 +88,7 @@ const SECTIONS = [
     body:
       'Questions about these Terms? Contact us:\n\n' +
       'Email: ruiyiyanng@gmail.com\n' +
-      'Website: https://everyone72.com',
+      'Website: https://everyone72.vercel.app',
   },
 ];
 

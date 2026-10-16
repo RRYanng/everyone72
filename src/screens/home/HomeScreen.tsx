@@ -2,11 +2,11 @@
 // 首页 — Golf Journal 风格（编辑式 + 水彩插画）
 // ============================================================
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, {
@@ -20,6 +20,7 @@ import { LoadingSpinner } from '../../components';
 import { Round, PracticePlan, UserStats } from '../../types';
 import { getUserStats } from '../../lib/streak';
 import { stripMarkdown } from '../../lib/stripMarkdown';
+import { isOfflineContent } from '../../lib/analysisSource';
 import {
   isDevMockActive,
   MOCK_PROFILE, MOCK_ROUNDS, MOCK_ACTIVE_PLAN, MOCK_USER_STATS,
@@ -73,7 +74,7 @@ export default function HomeScreen() {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [draftInfo, setDraftInfo] = useState<ScorecardDraft | null>(null);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (user) {
       fetchProfile();
       fetchRecentRounds();
@@ -82,7 +83,7 @@ export default function HomeScreen() {
     }
     // Check for unfinished draft
     findAnyDraft().then(d => setDraftInfo(d));
-  }, [user]);
+  }, [user]));
 
   const fetchProfile = async () => {
     if (isDevMockActive()) {
@@ -324,7 +325,9 @@ export default function HomeScreen() {
                   This Week's Practice Plan
                 </Text>
                 <View style={styles.aiBadge} accessible={false}>
-                  <Text style={styles.aiBadgeText}>AI</Text>
+                  <Text style={styles.aiBadgeText}>
+                    {isOfflineContent(activePlan.plan_text) ? 'Offline' : 'AI'}
+                  </Text>
                 </View>
               </View>
               {splitPlanIntoLines(activePlan.plan_text).map((line, i) => (
@@ -707,49 +710,25 @@ const styles = StyleSheet.create({
   streakBadges: { flexDirection: 'row', gap: spacing.xs },
   streakBadge: { fontSize: typography.base },
 
-  // ── Start New Round
-  // ── 横幅:未完成的记分卡草稿 / 加载失败重试
+  // ── Existing draft recovery / connection error banners
   draftBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.shiro,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.kincha,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.base,
-    marginBottom: spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.washi, borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.kincha, borderRadius: radius.md,
+    padding: spacing.base, marginBottom: spacing.md,
   },
   draftBannerContent: { flex: 1 },
-  draftBannerTitle: {
-    fontSize: typography.sm,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  draftBannerSub: {
-    fontSize: typography.xs,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
+  draftBannerTitle: { fontSize: typography.sm, fontWeight: '600', color: colors.text.primary },
+  draftBannerSub: { fontSize: typography.xs, color: colors.text.secondary, marginTop: spacing.xs },
   errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.shiro,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.aka,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.base,
-    marginBottom: spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.washi, borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.aka, borderRadius: radius.md,
+    padding: spacing.base, marginBottom: spacing.md,
   },
-  errorBannerTitle: {
-    fontSize: typography.sm,
-    fontWeight: '600',
-    color: colors.aka,
-  },
+  errorBannerTitle: { fontSize: typography.sm, fontWeight: '600', color: colors.aka },
 
+  // ── Start New Round
   startBtn: {
     height: 56,
     borderRadius: 28,

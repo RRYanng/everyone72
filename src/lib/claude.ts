@@ -11,6 +11,7 @@
 
 import { supabase } from './supabase';
 import { Round, HoleScore, Course, TroubleStats } from '../types';
+import { getLongestParStreak, getPuttingFacts, correctRoundFactCounts } from './parStreak';
 
 // ── Edge Function 调用 ────────────────────────────────────────────────────────
 // 失败一律抛 AIError,由界面显示真实状态并允许重试。
@@ -66,6 +67,10 @@ async function invokeAI(kind: AIKind, prompt: string): Promise<{ text: string; t
 
 // ── Prompt Builder ────────────────────────────────────────────────────────────
 export function buildPrompt(round: Round, holeScores: HoleScore[], course: Course): string {
+  const parStreak = getLongestParStreak(holeScores);
+  const playedPar = holeScores.reduce((total, hole) => total + hole.par, 0);
+  const parCount = holeScores.filter(hole => hole.strokes === hole.par).length;
+  const puttingFacts = getPuttingFacts(holeScores);
   const scoreTable = holeScores
     .map(h => {
       const troubles = h.troubles?.length ? h.troubles.join(', ') : '—';
@@ -90,6 +95,13 @@ export function buildPrompt(round: Round, holeScores: HoleScore[], course: Cours
 - Course: ${course.name}, ${course.city}, ${course.state}
 - Rating: ${course.course_rating} / Slope: ${course.slope_rating} / Par: ${course.total_par}
 
+## Verified Scorecard Facts
+- Holes played: ${holeScores.length}; played-hole par: ${playedPar}. The full-course par above is not the par for a partial round.
+- Total par holes: ${parCount}.
+- Putting totals: ${puttingFacts.totalPutts} putts; ${puttingFacts.twoPuttHoles} two-putt holes used exactly ${puttingFacts.twoPuttStrokes} putts. Hole counts and putt counts are different quantities.
+- Longest par streak: ${parStreak.length} consecutive pars${parStreak.length ? ` (holes #${parStreak.start} through #${parStreak.end}, inclusive)` : ''}.
+- These counts are computed from the scorecard. Use them exactly; do not estimate or recount them. Any par-streak claim must refer to this longest streak and use its exact count and hole range.
+
 ## Scorecard
 | Hole | Par | Strokes | Putts | vs Par | Trouble |
 |------|-----|---------|-------|--------|---------|
@@ -113,7 +125,8 @@ export async function analyzeRound(
 ): Promise<string> {
   const prompt = buildPrompt(round, holeScores, course);
   const { text } = await invokeAI('analysis', prompt);
-  return text;
+  // 事实校验:纠正模型对连续 par 数 / 推杆统计的数错
+  return correctRoundFactCounts(text, holeScores);
 }
 
 // ── generatePracticePlan ──────────────────────────────────────────────────────

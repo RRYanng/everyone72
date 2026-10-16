@@ -105,6 +105,8 @@ export default function LoginScreen({ navigation }: Props) {
           style={[styles.btn, loading && styles.btnDisabled]}
           onPress={handleLogin}
           disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Sign In"
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
