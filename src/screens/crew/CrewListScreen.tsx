@@ -98,54 +98,24 @@ export default function CrewListScreen() {
       return;
     }
 
-    const { data: crew } = await supabase
-      .from('crews')
-      .select('id, name, max_members')
-      .eq('invite_code', inviteCode.trim().toUpperCase())
-      .maybeSingle();
-
-    if (!crew) {
-      setJoinError('Invite code not found. Please check and try again.');
-      setJoining(false);
-      return;
-    }
-
-    const { count } = await supabase
-      .from('crew_members')
-      .select('id', { count: 'exact', head: true })
-      .eq('crew_id', crew.id);
-
-    if ((count ?? 0) >= crew.max_members) {
-      setJoinError(`${crew.name} is full (${crew.max_members} members max).`);
-      setJoining(false);
-      return;
-    }
-
-    const { data: existing } = await supabase
-      .from('crew_members')
-      .select('id')
-      .eq('crew_id', crew.id)
-      .eq('user_id', user!.id)
-      .maybeSingle();
-
-    if (existing) {
-      setJoinError("You're already a member of this crew.");
-      setJoining(false);
-      return;
-    }
-
-    const { error } = await supabase
-      .from('crew_members')
-      .insert({ crew_id: crew.id, user_id: user!.id, role: 'member' });
+    // 服务端 RPC 校验邀请码、名额、重复加入;错误用固定 message 返回
+    const { data: crewId, error } = await supabase
+      .rpc('join_crew', { p_code: inviteCode.trim() });
 
     setJoining(false);
-    if (error) {
-      setJoinError('Failed to join. Please try again.');
-    } else {
-      setInviteCode('');
-      fetchCrews();
-      navigation.navigate('CrewDetail', { crewId: crew.id });
+    if (error || !crewId) {
+      const messages: Record<string, string> = {
+        invalid_code:   'Invite code not found. Please check and try again.',
+        already_member: "You're already a member of this crew.",
+        crew_full:      'This crew is full.',
+      };
+      if (!messages[error?.message ?? '']) console.error('[JoinCrew] rpc error:', error);
+      setJoinError(messages[error?.message ?? ''] ?? 'Failed to join. Please check your connection and try again.');
+      return;
     }
+    setInviteCode('');
+    fetchCrews();
+    navigation.navigate('CrewDetail', { crewId: crewId as string });
   };
 
   const renderCrew = ({ item }: { item: Crew }) => (

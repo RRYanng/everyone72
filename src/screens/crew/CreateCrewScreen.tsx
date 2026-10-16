@@ -33,11 +33,6 @@ const ICON_OPTIONS: IconName[] = [
 
 const DEFAULT_ICON: IconName = 'golf-outline';
 
-function generateInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
-
 export default function CreateCrewScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
@@ -69,44 +64,24 @@ export default function CreateCrewScreen() {
       return;
     }
 
-    // 生成唯一邀请码（碰撞重试）
-    let inviteCode = generateInviteCode();
-    for (let attempts = 0; attempts < 5; attempts++) {
-      const { data: existing } = await supabase
-        .from('crews')
-        .select('id')
-        .eq('invite_code', inviteCode)
-        .maybeSingle();
-      if (!existing) break;
-      inviteCode = generateInviteCode();
-    }
-
-    // 创建 crew
-    const { data: crew, error: crewErr } = await supabase
-      .from('crews')
-      .insert({
-        name:        name.trim(),
-        description: desc.trim(),
-        emoji:       icon,                // 存 Ionicon 名（CrewIcon 兼容渲染）
-        creator_id:  user.id,
-        invite_code: inviteCode,
-      })
-      .select()
-      .single();
+    // 服务端 RPC:生成邀请码 + 创建 crew + 写入 owner 成员,同一事务,不会留下孤儿 crew
+    const { data, error: crewErr } = await supabase.rpc('create_crew', {
+      p_name:        name.trim(),
+      p_description: desc.trim(),
+      p_emoji:       icon,                // 存 Ionicon 名（CrewIcon 兼容渲染）
+    });
+    const crew = data as { id: string } | null;
 
     if (crewErr || !crew) {
-      // 真实错误日志，方便 debug RLS / schema 问题
-      console.error('[CreateCrew] insert error:', crewErr);
-      setError(crewErr?.message ?? 'Failed to create crew. Please try again.');
+      console.error('[CreateCrew] create_crew error:', crewErr);
+      setError(
+        crewErr?.message === 'invalid_name'
+          ? 'Crew name must be 1–40 characters.'
+          : 'Could not create the crew. Please check your connection and try again.',
+      );
       setLoading(false);
       return;
     }
-
-    // Add creator as owner member
-    const { error: memberErr } = await supabase
-      .from('crew_members')
-      .insert({ crew_id: crew.id, user_id: user.id, role: 'owner' });
-    if (memberErr) console.error('[CreateCrew] member insert error:', memberErr);
 
     setLoading(false);
     navigation.replace('CrewDetail', { crewId: crew.id });
