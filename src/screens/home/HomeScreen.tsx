@@ -82,7 +82,7 @@ export default function HomeScreen() {
       fetchUserStats();
     }
     // Check for unfinished draft
-    findAnyDraft().then(d => setDraftInfo(d));
+    findAnyDraft(user?.id).then(d => setDraftInfo(d));
   }, [user]));
 
   const fetchProfile = async () => {

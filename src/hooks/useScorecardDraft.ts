@@ -4,7 +4,7 @@
 // 第一层（本地，必做）
 //   Web:     localStorage
 //   Native:  AsyncStorage
-//   Key 格式: scorecard_draft_{courseId}
+//   Key 格式: scorecard_draft_{userId}_{courseId}
 //   每次输入 debounce 500ms 写入；草稿保留 7 天后自动清除。
 //
 // 第二层（云端同步，次要）
@@ -12,7 +12,7 @@
 //   加载时比较本地 savedAt 与远程 updated_at，自动取较新的一份，
 //   支持换设备继续填。
 //
-// 注：localStorage key 仍是 courseId-only（不含 date）；round_date
+// 注：localStorage key 含 userId + courseId（不含 date）；round_date
 //     只存在草稿数据内部，用于 Supabase 的 (user_id, course_id,
 //     round_date) 唯一约束 upsert。远程查询按 (user_id, course_id)
 //     取 updated_at 最新的一行，因此 key 不带 date 也能正确对齐。
@@ -85,8 +85,10 @@ const storage = {
 };
 
 // ── Helper: key builder ──────────────────────────────────────
-function draftKey(courseId: string): string {
-  return `${DRAFT_PREFIX}${courseId}`;
+// 本地键必须带用户 ID:同一台设备/浏览器上换账号时,不能看到、恢复或提交上一个账号的草稿。
+// (旧版本的键是 scorecard_draft_{courseId},没有用户 ID,新版本不会读取它们。)
+function draftKey(userId: string | null | undefined, courseId: string): string {
+  return `${DRAFT_PREFIX}${userId ?? 'anon'}_${courseId}`;
 }
 
 // ── Hook ─────────────────────────────────────────────────────
@@ -105,7 +107,7 @@ export function useScorecardDraft(courseId: string, userId?: string | null) {
   // ── 第一层：本地读取 ───────────────────────────────────────
   const loadLocal = useCallback(async (): Promise<ScorecardDraft | null> => {
     try {
-      const raw = await storage.getItem(draftKey(courseId));
+      const raw = await storage.getItem(draftKey(userId, courseId));
       if (!raw) return null;
 
       const draft: ScorecardDraft = JSON.parse(raw);
@@ -113,14 +115,14 @@ export function useScorecardDraft(courseId: string, userId?: string | null) {
       // 过期检查
       const savedTime = new Date(draft.savedAt).getTime();
       if (Date.now() - savedTime > DRAFT_TTL_MS) {
-        await storage.removeItem(draftKey(courseId));
+        await storage.removeItem(draftKey(userId, courseId));
         return null;
       }
       return draft;
     } catch {
       return null;
     }
-  }, [courseId]);
+  }, [userId, courseId]);
 
   // ── 第二层：远程读取（取该球场 updated_at 最新的一行） ──────
   const loadRemote = useCallback(async (): Promise<ScorecardDraft | null> => {
@@ -216,7 +218,7 @@ export function useScorecardDraft(courseId: string, userId?: string | null) {
             ...draft,
             savedAt: new Date().toISOString(),
           };
-          await storage.setItem(draftKey(courseId), JSON.stringify(fullDraft));
+          await storage.setItem(draftKey(userId, courseId), JSON.stringify(fullDraft));
         } catch {
           // 存储失败 — 静默处理，不影响用户体验
         }
@@ -225,7 +227,7 @@ export function useScorecardDraft(courseId: string, userId?: string | null) {
       // 第二层：远程，debounce 30s
       saveRemote(draft);
     },
-    [courseId, saveRemote],
+    [userId, courseId, saveRemote],
   );
 
   // ── 立即保存本地（不 debounce，用于退出前同步保存） ─────────
@@ -237,12 +239,12 @@ export function useScorecardDraft(courseId: string, userId?: string | null) {
           ...draft,
           savedAt: new Date().toISOString(),
         };
-        await storage.setItem(draftKey(courseId), JSON.stringify(fullDraft));
+        await storage.setItem(draftKey(userId, courseId), JSON.stringify(fullDraft));
       } catch {
         // noop
       }
     },
-    [courseId],
+    [userId, courseId],
   );
 
   // ── 清除草稿（提交成功 / 放弃时调用：本地 + 远程都清） ───────
@@ -252,7 +254,7 @@ export function useScorecardDraft(courseId: string, userId?: string | null) {
 
     // 第一层：本地
     try {
-      await storage.removeItem(draftKey(courseId));
+      await storage.removeItem(draftKey(userId, courseId));
     } catch {
       // noop
     }
@@ -293,13 +295,15 @@ export function useScorecardDraft(courseId: string, userId?: string | null) {
  * 检查所有球场是否存在未完成草稿（本地）
  * 返回第一个找到的草稿信息（用于在首页显示恢复横幅）
  */
-export async function findAnyDraft(): Promise<ScorecardDraft | null> {
+export async function findAnyDraft(userId: string | null | undefined): Promise<ScorecardDraft | null> {
+  if (!userId) return null;
+  const userPrefix = `${DRAFT_PREFIX}${userId}_`;
   if (Platform.OS === 'web') {
     try {
       if (typeof localStorage === 'undefined') return null;
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(DRAFT_PREFIX)) {
+        if (key && key.startsWith(userPrefix)) {
           const raw = localStorage.getItem(key);
           if (raw) {
             const draft: ScorecardDraft = JSON.parse(raw);
@@ -321,7 +325,7 @@ export async function findAnyDraft(): Promise<ScorecardDraft | null> {
   // Native: AsyncStorage 不支持 enumerate keys by prefix
   try {
     const allKeys = await AsyncStorage.getAllKeys();
-    const draftKeys = allKeys.filter(k => k.startsWith(DRAFT_PREFIX));
+    const draftKeys = allKeys.filter(k => k.startsWith(userPrefix));
     for (const key of draftKeys) {
       const raw = await AsyncStorage.getItem(key);
       if (raw) {
