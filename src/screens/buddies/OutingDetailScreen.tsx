@@ -92,7 +92,7 @@ export default function OutingDetailScreen() {
     if (!o) { setLoading(false); return; }
 
     const { data: org } = await supabase
-      .from('profiles')
+      .from('public_profiles')
       .select('id, username, city, home_course_id, handicap, years_playing, bio')
       .eq('id', o.organizer_id)
       .maybeSingle();
@@ -102,7 +102,7 @@ export default function OutingDetailScreen() {
     const ids = mem.map(m => m.user_id);
     const nameMap: Record<string, string> = {};
     if (ids.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, username').in('id', ids);
+      const { data: profs } = await supabase.from('public_profiles').select('id, username').in('id', ids);
       (profs ?? []).forEach((p: { id: string; username: string }) => { nameMap[p.id] = p.username; });
     }
     setMembers(mem.map(m => ({ ...m, username: nameMap[m.user_id] ?? '球友' })));

@@ -51,3 +51,39 @@ expect "异地用户读不到留言" C \
   "reset role; insert into outing_comments(outing_id,user_id,body) values ('$O','$A','welcome'); set local role authenticated; select count(*) from outing_comments;" "0"
 expect "别的局的成员不能在这个局留言(旧版恒真 bug)" B \
   "$SU insert into outings(id,organizer_id,course_id,city,play_date,slots_total) values ('22222222-0000-0000-0000-0000000000f2','$C','c1','Irvine',current_date+1,4); insert into outing_members(outing_id,user_id,status) values ('$O','$B','joined'); $BACK insert into outing_comments(outing_id,user_id,body) values ('22222222-0000-0000-0000-0000000000f2','$B','spam');" "row-level security"
+
+echo "── friendships ──"
+LOG=44444444-0000-0000-0000-000000000001
+expect "不能给自己伪造 accepted 好友关系" C "insert into friendships(user_id,friend_id,status) values ('$C','$A','accepted');" "row-level security"
+expect "不能加自己为好友" C "insert into friendships(user_id,friend_id,status) values ('$C','$C','pending');" "row-level security"
+expect "正常发好友请求(pending)" C "insert into friendships(user_id,friend_id,status) values ('$C','$A','pending') returning status;" "pending"
+expect "非好友读不到对方的打卡" C "select count(*) from practice_logs where user_id='$A';" "0"
+expect "已接受的好友读得到打卡" B "select count(*) from practice_logs where user_id='$A';" "1"
+expect "被请求方可以接受" A "$SU insert into friendships(user_id,friend_id,status) values ('$C','$A','pending'); $BACK update friendships set status='accepted' where user_id='$C' and friend_id=auth.uid() returning status;" "accepted"
+expect "请求方不能自己接受(0 行)" C "$SU insert into friendships(user_id,friend_id,status) values ('$C','$A','pending'); $BACK with u as (update friendships set status='accepted' where user_id=auth.uid() returning 1) select count(*) from u;" "0"
+expect "不能改 friend 关系的主体" A "$SU insert into friendships(user_id,friend_id,status) values ('$C','$A','pending'); $BACK update friendships set user_id='$B', status='accepted' where friend_id=auth.uid() and user_id='$C';" "friendship_keys_immutable"
+expect "好友关系双方都能删除" B "delete from friendships where id='$F' returning id;" "$F"
+expect "无关的人删不掉(0 行)" C "with d as (delete from friendships where id='$F' returning 1) select count(*) from d;" "0"
+
+echo "── reactions ──"
+expect "好友能看到打卡上的反应" B "select count(*) from reactions where practice_log_id='$LOG';" "1"
+expect "非好友看不到反应" C "select count(*) from reactions where practice_log_id='$LOG';" "0"
+expect "非好友不能对看不到的打卡点赞" C "insert into reactions(practice_log_id,user_id,type) values ('$LOG','$C','like');" "row-level security"
+expect "好友可以评论" B "insert into reactions(practice_log_id,user_id,type,content) values ('$LOG','$B','comment','nice') returning type;" "comment"
+
+echo "── user_stats / waitlist ──"
+expect "匿名读 user_stats 得不到数据" ANON "select count(*) from user_stats;" "0"
+expect "登录用户能读 user_stats(排行榜)" B "select count(*) from user_stats;" "1"
+expect "匿名无权读 streak_leaderboard" A "select has_table_privilege('anon','public.streak_leaderboard','select');" "f"
+expect "匿名可以加入候补(不带 user_id;应用端不带 returning)" ANON "insert into coach_waitlist(email) values ('x@y.com'); reset role; select count(*) from coach_waitlist where email='x@y.com';" "1"
+expect "匿名不能冒用 user_id 加入候补" ANON "insert into coach_waitlist(email,user_id) values ('x@y.com','$A');" "row-level security"
+expect "登录用户不能冒用别人的 user_id" B "insert into coach_waitlist(email,user_id) values ('b@y.com','$A');" "row-level security"
+expect "登录用户可以用自己的 user_id" B "insert into coach_waitlist(email,user_id) values ('b@y.com','$B') returning email;" "b@y.com"
+
+echo "── public_profiles ──"
+expect "登录用户能读到别人的 username" B "select username from public_profiles where id='$A';" "alice"
+expect "视图里没有 email 列" B "select email from public_profiles limit 1;" "does not exist"
+expect "profiles 本表仍然只能看自己" B "select count(*) from profiles where id='$A';" "0"
+expect "匿名无权读 public_profiles,登录用户有权" A \
+  "select has_table_privilege('anon','public.public_profiles','select') || '|' || has_table_privilege('authenticated','public.public_profiles','select');" "false|true"
+expect "登录用户不能通过视图写 profiles" B "update public_profiles set username='hax' where id='$B';" "permission denied"

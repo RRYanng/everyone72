@@ -35,6 +35,7 @@ export default function FriendsScreen() {
   const [searchError, setSearchError]     = useState('');
   const [friends, setFriends]             = useState<FriendEntry[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(true);
+  const [loadError, setLoadError]       = useState('');
   const [sendingRequest, setSendingRequest] = useState(false);
 
   // 依赖 user：user 可用后自动触发
@@ -43,28 +44,42 @@ export default function FriendsScreen() {
   // ── 加载好友列表 ────────────────────────────────────────────
   const fetchFriends = async () => {
     if (!user) { setLoadingFriends(false); return; }
-    const { data } = await supabase
+    // friendships 的外键指向 auth.users(不是 profiles),PostgREST 无法嵌入 profiles,
+    // 所以先取好友关系,再用 public_profiles 批量取对方用户名。
+    const { data: rows, error } = await supabase
       .from('friendships')
-      .select('id, user_id, friend_id, status, profiles!friendships_user_id_fkey(username), friend_profiles:profiles!friendships_friend_id_fkey(username)')
+      .select('id, user_id, friend_id, status')
       .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
 
-    if (data) {
-      const mapped: FriendEntry[] = data.map((row: any) => {
-        const isSender = row.user_id === user.id;
-        const otherUsername = isSender
-          ? row.friend_profiles?.username
-          : row.profiles?.username;
-        const otherId = isSender ? row.friend_id : row.user_id;
-        return {
-          id: otherId,
-          username: otherUsername ?? 'Unknown',
-          friendshipId: row.id,
-          status: row.status,
-          direction: isSender ? 'sent' : 'received',
-        };
-      });
-      setFriends(mapped);
+    if (error || !rows) {
+      console.error('[Friends] load error:', error);
+      setLoadError('Could not load your friends.');
+      setLoadingFriends(false);
+      return;
     }
+
+    const otherIds = Array.from(new Set(
+      rows.map((r: any) => (r.user_id === user.id ? r.friend_id : r.user_id) as string),
+    ));
+    const names: Record<string, string> = {};
+    if (otherIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('public_profiles').select('id, username').in('id', otherIds);
+      (profs ?? []).forEach((p: any) => { names[p.id] = p.username; });
+    }
+
+    setLoadError('');
+    setFriends(rows.map((row: any): FriendEntry => {
+      const isSender = row.user_id === user.id;
+      const otherId = isSender ? row.friend_id : row.user_id;
+      return {
+        id: otherId,
+        username: names[otherId] ?? 'Unknown',
+        friendshipId: row.id,
+        status: row.status,
+        direction: isSender ? 'sent' : 'received',
+      };
+    }));
     setLoadingFriends(false);
   };
 
@@ -76,7 +91,7 @@ export default function FriendsScreen() {
     setSearchResult(null);
 
     const { data } = await supabase
-      .from('profiles')
+      .from('public_profiles')
       .select('id, username')
       .ilike('username', searchQuery.trim())
       .neq('id', user!.id)
@@ -124,14 +139,20 @@ export default function FriendsScreen() {
 
   // ── 接受好友请求 ────────────────────────────────────────────
   const acceptRequest = async (friendshipId: string, fromUsername: string) => {
-    await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
+    const { error } = await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
+    if (error) { Alert.alert('Error', 'Could not accept the request. Please try again.'); return; }
     notifyFriendRequestAccepted(fromUsername);
     fetchFriends();
   };
 
   // ── 删除好友/取消请求 ────────────────────────────────────────
   const removeFriend = async (friendshipId: string) => {
-    await supabase.from('friendships').delete().eq('id', friendshipId);
+    // .select() 让"0 行被删除"(例如被 RLS 拒绝)也能被发现,而不是静默成功
+    const { data, error } = await supabase.from('friendships').delete().eq('id', friendshipId).select('id');
+    if (error || !data || data.length === 0) {
+      Alert.alert('Error', 'Could not remove this friend. Please try again.');
+      return;
+    }
     fetchFriends();
   };
 
@@ -243,6 +264,17 @@ export default function FriendsScreen() {
             </Text>
             {loadingFriends ? (
               <ActivityIndicator color="#1a472a" style={{ marginTop: 20 }} />
+            ) : loadError ? (
+              <TouchableOpacity
+                style={styles.empty}
+                onPress={() => { setLoadError(''); setLoadingFriends(true); fetchFriends(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading friends"
+              >
+                <Text style={styles.emptyEmoji}>⚠️</Text>
+                <Text style={styles.emptyText}>{loadError}</Text>
+                <Text style={styles.emptySub}>Tap to retry</Text>
+              </TouchableOpacity>
             ) : accepted.length === 0 ? (
               <View style={styles.empty}>
                 <Text style={styles.emptyEmoji}>👥</Text>

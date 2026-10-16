@@ -72,7 +72,7 @@ export default function OutingsListScreen() {
       const [{ data: memberRows }, { data: profiles }] = await Promise.all([
         supabase.from('outing_members')
           .select('outing_id').in('outing_id', ids).eq('status', 'joined'),
-        supabase.from('profiles')
+        supabase.from('public_profiles')
           .select('id, username').in('id', organizerIds),
       ]);
 

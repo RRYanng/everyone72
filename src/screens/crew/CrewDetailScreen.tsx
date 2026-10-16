@@ -93,7 +93,7 @@ export default function CrewDetailScreen() {
 
     // 2. Get profiles (usernames)
     const { data: profiles } = await supabase
-      .from('profiles')
+      .from('public_profiles')
       .select('id, username')
       .in('id', userIds);
 

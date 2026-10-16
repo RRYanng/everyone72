@@ -13,3 +13,6 @@ insert into public.crew_members (crew_id,user_id,role) values ('11111111-0000-00
 insert into public.outings (id,organizer_id,course_id,city,play_date,slots_total,join_mode) values ('22222222-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','c1','Irvine',current_date+3,2,'approve') on conflict do nothing;
 insert into public.outing_members (outing_id,user_id,status) values ('22222222-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','joined') on conflict do nothing;
 insert into public.friendships (id,user_id,friend_id,status) values ('33333333-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000002','accepted') on conflict do nothing;
+insert into public.practice_logs (id,user_id,note) values ('44444444-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','range day') on conflict do nothing;
+insert into public.reactions (practice_log_id,user_id,type) values ('44444444-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000002','like') on conflict do nothing;
+insert into public.user_stats (user_id,current_streak) values ('aaaaaaaa-0000-0000-0000-000000000001',3) on conflict (user_id) do update set current_streak = 3;

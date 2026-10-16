@@ -216,7 +216,7 @@ export default function PracticeFeedScreen() {
 
     const userIds = [...new Set(logsData.map((l: any) => l.user_id as string))];
     const { data: profilesData } = await supabase
-      .from('profiles')
+      .from('public_profiles')
       .select('id, username, avatar_url')
       .in('id', userIds);
 

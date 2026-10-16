@@ -48,7 +48,7 @@ export default function LeaderboardScreen() {
 
       const uids = streakData.map((r: any) => r.user_id as string);
       const { data: profilesData2 } = await supabase
-        .from('profiles')
+        .from('public_profiles')
         .select('id, username')
         .in('id', uids);
       const profileMap2: Record<string, string> = {};
@@ -93,7 +93,7 @@ export default function LeaderboardScreen() {
     // Step 2: 批量拉取 profiles
     const userIds = [...new Set(data.map((r: any) => r.user_id as string))];
     const { data: profilesData } = await supabase
-      .from('profiles')
+      .from('public_profiles')
       .select('id, username')
       .in('id', userIds);
     const profileMap: Record<string, string> = {};
