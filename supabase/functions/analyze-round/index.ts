@@ -1,106 +1,56 @@
 // ============================================================
 // Supabase Edge Function: analyze-round
-// 代理 Claude API 调用，保护 API key 不暴露给客户端
+// 代理 Claude API 调用,保护 API key 不暴露给客户端。逻辑见 handler.ts。
 //
-// 部署命令：
+// 部署:
 //   supabase functions deploy analyze-round
 //
-// 设置密钥（在 Supabase Dashboard > Functions > Secrets）：
-//   ANTHROPIC_API_KEY = sk-ant-...
+// Secrets(Dashboard > Edge Functions > Secrets;SUPABASE_* 由平台自动注入):
+//   ANTHROPIC_API_KEY   必填
+//   AI_DAILY_LIMIT      可选,每用户每日调用上限,默认 40
+//   ANTHROPIC_MODEL     可选,默认 claude-sonnet-4-20250514
+//   ALLOWED_ORIGINS     可选,逗号分隔的 Web 来源白名单
+//
+// 依赖迁移 20261016100400_ai_usage_quota.sql(consume_ai_quota)。
 // ============================================================
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { handle, type Env } from './handler.ts';
 
-const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
+const DEFAULT_ORIGINS = [
+  'https://everyone72.vercel.app',
+  'http://localhost:8081',
+  'http://localhost:19006',
+];
 
-// CORS headers — allow calls from Expo app (native + web preview)
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+function loadEnv(): Env {
+  const need = (k: string) => {
+    const v = Deno.env.get(k);
+    if (!v) throw new Error(`Missing env ${k}`);
+    return v;
+  };
+  const limit = Number(Deno.env.get('AI_DAILY_LIMIT') ?? '40');
+  return {
+    supabaseUrl: need('SUPABASE_URL'),
+    anonKey: need('SUPABASE_ANON_KEY'),
+    serviceKey: need('SUPABASE_SERVICE_ROLE_KEY'),
+    anthropicKey: need('ANTHROPIC_API_KEY'),
+    model: Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-4-20250514',
+    dailyLimit: Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 40,
+    allowedOrigins:
+      Deno.env.get('ALLOWED_ORIGINS')?.split(',').map((s) => s.trim()).filter(Boolean) ?? DEFAULT_ORIGINS,
+  };
+}
 
-serve(async (req: Request) => {
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
-  if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
-  }
-
+Deno.serve(async (req) => {
+  let env: Env;
   try {
-    // 1. Validate that request comes from an authenticated Supabase user
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: missing auth token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 2. Parse the request body
-    const body = await req.json();
-    const { prompt } = body as { prompt: string };
-
-    if (!prompt || typeof prompt !== 'string' || prompt.length < 10) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid request: prompt is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 3. Retrieve API key from Deno environment (set via Supabase secrets)
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!anthropicKey) {
-      console.error('[analyze-round] ANTHROPIC_API_KEY secret not configured');
-      return new Response(
-        JSON.stringify({ error: 'Server configuration error' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 4. Call Claude API
-    const claudeRes = await fetch(CLAUDE_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-      }),
+    env = loadEnv();
+  } catch (e) {
+    console.error('[analyze-round]', e instanceof Error ? e.message : e);
+    return new Response(JSON.stringify({ code: 'server_misconfigured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
     });
-
-    if (!claudeRes.ok) {
-      const errorText = await claudeRes.text();
-      console.error('[analyze-round] Claude API error:', claudeRes.status, errorText);
-      return new Response(
-        JSON.stringify({ error: `Claude API error: ${claudeRes.status}` }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const data = await claudeRes.json();
-    const analysisText: string = data.content[0].text;
-
-    // 5. Return the analysis text
-    return new Response(
-      JSON.stringify({ analysis: analysisText }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
-  } catch (err) {
-    console.error('[analyze-round] Unexpected error:', err);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   }
+  return handle(req, env);
 });
