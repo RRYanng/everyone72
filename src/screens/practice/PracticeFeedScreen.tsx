@@ -178,6 +178,7 @@ export default function PracticeFeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [myUsername, setMyUsername] = useState<string>('');
 
   const fabScale = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -188,7 +189,7 @@ export default function PracticeFeedScreen() {
 
   useFocusEffect(useCallback(() => {
     fetchFeed();
-    if (user) fetchUserStats();
+    if (user) { fetchUserStats(); fetchMyUsername(); }
   }, [user]));
 
   const fetchFeed = async () => {
@@ -228,6 +229,13 @@ export default function PracticeFeedScreen() {
     setRefreshing(false);
   };
 
+  // 用户名只存在 profiles 表里(注册时没有写进 auth 的 user_metadata),头像首字母要从这里取
+  const fetchMyUsername = async () => {
+    if (!user || isDevMockActive()) return;
+    const { data } = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle();
+    if (data?.username) setMyUsername(data.username);
+  };
+
   const fetchUserStats = async () => {
     if (!user) return;
     const stats = await getUserStats(user.id);
@@ -235,8 +243,8 @@ export default function PracticeFeedScreen() {
   };
 
   const totalCount = logs.length;
-  const username = (user as any)?.user_metadata?.username ?? 'A';
-  const userInitial = (username[0] ?? 'A').toUpperCase();
+  // 用户名 → 邮箱前缀 → 'U';不再写死 'A'
+  const userInitial = ((myUsername || user?.email?.split('@')[0] || 'U')[0]).toUpperCase();
 
   return (
     <SafeAreaView style={styles.safe}>
