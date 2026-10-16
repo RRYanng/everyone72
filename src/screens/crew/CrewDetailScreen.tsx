@@ -5,8 +5,9 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, TextInput, Alert,
+  SafeAreaView, ActivityIndicator, TextInput,
 } from 'react-native';
+import { confirmAction, notify } from '../../lib/dialog';
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -190,19 +191,20 @@ export default function CrewDetailScreen() {
       ? 'Delete this crew? All members and challenges will be removed.'
       : 'Leave this crew?';
 
-    const confirmed = await new Promise<boolean>(resolve => {
-      Alert.alert(isOwner ? 'Delete Crew' : 'Leave Crew', msg, [
-        { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
-        { text: isOwner ? 'Delete' : 'Leave', style: 'destructive', onPress: () => resolve(true) },
-      ]);
-    });
+    const confirmed = await confirmAction(
+      isOwner ? 'Delete Crew' : 'Leave Crew', msg, isOwner ? 'Delete' : 'Leave', true,
+    );
     if (!confirmed) return;
 
-    if (isOwner) {
-      await supabase.from('crews').delete().eq('id', crewId);
-    } else {
-      await supabase.from('crew_members').delete()
-        .eq('crew_id', crewId).eq('user_id', user!.id);
+    // .select() 让"0 行被删"(被 RLS 拒绝等)也能被发现,而不是静默当作成功
+    const { data, error } = isOwner
+      ? await supabase.from('crews').delete().eq('id', crewId).select('id')
+      : await supabase.from('crew_members').delete()
+          .eq('crew_id', crewId).eq('user_id', user!.id).select('id');
+    if (error || !data || data.length === 0) {
+      console.error('[CrewDetail] leave/delete failed:', error);
+      notify('Error', isOwner ? 'Could not delete the crew. Please try again.' : 'Could not leave the crew. Please try again.');
+      return;
     }
     navigation.goBack();
   };

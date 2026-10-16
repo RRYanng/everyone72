@@ -5,8 +5,9 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  SafeAreaView, FlatList, ActivityIndicator, Alert,
+  SafeAreaView, FlatList, ActivityIndicator,
 } from 'react-native';
+import { notify } from '../../lib/dialog';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -112,7 +113,7 @@ export default function FriendsScreen() {
     // 检查是否已有关系
     const existing = friends.find(f => f.id === friendId);
     if (existing) {
-      Alert.alert('Already Friends', existing.status === 'accepted'
+      notify('Already Friends', existing.status === 'accepted'
         ? 'You are already friends with this user.'
         : 'A friend request is already pending.');
       setSendingRequest(false);
@@ -126,7 +127,7 @@ export default function FriendsScreen() {
     });
 
     if (error) {
-      Alert.alert('Error', error.message);
+      notify('Error', error.message);
     } else {
       setSearchResult(null);
       setSearchQuery('');
@@ -140,7 +141,7 @@ export default function FriendsScreen() {
   // ── 接受好友请求 ────────────────────────────────────────────
   const acceptRequest = async (friendshipId: string, fromUsername: string) => {
     const { error } = await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
-    if (error) { Alert.alert('Error', 'Could not accept the request. Please try again.'); return; }
+    if (error) { notify('Error', 'Could not accept the request. Please try again.'); return; }
     notifyFriendRequestAccepted(fromUsername);
     fetchFriends();
   };
@@ -150,7 +151,7 @@ export default function FriendsScreen() {
     // .select() 让"0 行被删除"(例如被 RLS 拒绝)也能被发现,而不是静默成功
     const { data, error } = await supabase.from('friendships').delete().eq('id', friendshipId).select('id');
     if (error || !data || data.length === 0) {
-      Alert.alert('Error', 'Could not remove this friend. Please try again.');
+      notify('Error', 'Could not remove this friend. Please try again.');
       return;
     }
     fetchFriends();

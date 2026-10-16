@@ -6,7 +6,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
-  ActivityIndicator, Alert, Animated,
+  ActivityIndicator, Animated,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 
 import { supabase } from '../../lib/supabase';
+import { notify } from '../../lib/dialog';
 import { analyzeRound, generatePracticePlan, aiErrorMessage } from '../../lib/claude';
 import { isOfflineContent } from '../../lib/analysisSource';
 import { hasIncorrectRoundFactCount } from '../../lib/parStreak';
@@ -157,7 +158,7 @@ export default function AnalysisScreen() {
 
     if (!roundData) {
       setLoadingData(false);
-      Alert.alert('Error', 'Round not found.');
+      notify('Error', 'Round not found.');
       return;
     }
 
