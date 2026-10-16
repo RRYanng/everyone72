@@ -132,6 +132,7 @@ begin
 end $$;
 
 -- 凭邀请码加入:错误用固定的 message 返回,客户端按 message 映射文案
+-- (PT404/PT409 是 PostgREST 的自定义码,分别映射为 HTTP 404/409,避免被当成 5xx)
 --   invalid_code | already_member | crew_full | not_authenticated
 create or replace function public.join_crew(p_code text)
 returns uuid
@@ -149,7 +150,7 @@ begin
    where invite_code = upper(btrim(p_code))
    for update;                       -- 串行化同一 crew 的并发加入,名额不会超
   if not found then
-    raise exception 'invalid_code' using errcode = 'P0002';
+    raise exception 'invalid_code' using errcode = 'PT404';
   end if;
 
   if exists (select 1 from public.crew_members
@@ -159,7 +160,7 @@ begin
 
   select count(*) into v_cnt from public.crew_members where crew_id = v_crew.id;
   if v_cnt >= v_crew.max_members then
-    raise exception 'crew_full' using errcode = '53400';
+    raise exception 'crew_full' using errcode = 'PT409';
   end if;
 
   insert into public.crew_members (crew_id, user_id, role)
@@ -231,7 +232,7 @@ declare
 begin
   select * into v_o from public.outings where id = NEW.outing_id for update;
   if not found then
-    raise exception 'outing_not_found' using errcode = 'P0002';
+    raise exception 'outing_not_found' using errcode = 'PT404';
   end if;
 
   if TG_OP = 'UPDATE' then
