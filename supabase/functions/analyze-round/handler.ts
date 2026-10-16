@@ -40,6 +40,14 @@ const SYSTEM_PROMPT =
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
+// Sonnet 5.5 默认开启自适应思考,而思考 token 会占用 max_tokens,
+// 80~150 词的短输出可能被挤掉。这里是单轮文字生成、不用工具,
+// 所以用 between_tools(该模型的最低思考档),把 max_tokens 全部留给正文。
+// 该取值只有 Sonnet 5.5 接受,其他模型会 400,所以只在它身上发送。
+export function thinkingConfig(model: string): { thinking?: { type: 'between_tools' } } {
+  return model === 'claude-sonnet-5-5' ? { thinking: { type: 'between_tools' } } : {};
+}
+
 export function corsHeaders(origin: string | null, allowed: string[]): Record<string, string> {
   const h: Record<string, string> = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -135,6 +143,7 @@ export async function handle(req: Request, env: Env, fetchImpl: Fetch = fetch): 
         max_tokens: KIND_MAX_TOKENS[kind],
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: prompt }],
+        ...thinkingConfig(env.model),
       }),
     });
 

@@ -2,7 +2,7 @@
 //   docker run --rm -v "$PWD/supabase/functions/analyze-round":/app -w /app denoland/deno:alpine deno test handler_test.ts
 // 全部使用注入的假 fetch,不访问网络、不消耗任何 API 额度。
 
-import { handle, KIND_MAX_TOKENS, MAX_PROMPT_CHARS, type Env } from './handler.ts';
+import { handle, KIND_MAX_TOKENS, MAX_PROMPT_CHARS, thinkingConfig, type Env } from './handler.ts';
 
 const env: Env = {
   supabaseUrl: 'https://proj.supabase.co',
@@ -166,4 +166,18 @@ Deno.test('上游 400 → 502 ai_error;上游超时/断开 → 504;空内容 →
   eq((await handle(post({ prompt: PROMPT }), env, makeFetch({ claudeThrows: true }).f)).status, 504, 'timeout/abort');
   eq((await handle(post({ prompt: PROMPT }), env, makeFetch({ claudeBody: { content: [] } }).f)).status, 502, 'empty content');
   eq((await handle(post({ prompt: PROMPT }), env, makeFetch({ claudeBody: { content: [{ type: 'text', text: '   ' }] } }).f)).status, 502, 'blank text');
+});
+
+Deno.test('Sonnet 5.5 发送 thinking=between_tools,其他模型不带 thinking 字段(否则会 400)', async () => {
+  eq(JSON.stringify(thinkingConfig('claude-sonnet-5-5')), '{"thinking":{"type":"between_tools"}}', 'sonnet 5.5');
+  eq(JSON.stringify(thinkingConfig('claude-sonnet-4-6')), '{}', 'other model');
+
+  const a = makeFetch();
+  await handle(post({ prompt: PROMPT }), { ...env, model: 'claude-sonnet-5-5' }, a.f);
+  eq((a.calls.lastClaude?.thinking as { type: string }).type, 'between_tools', 'body has thinking for sonnet 5.5');
+  ok(!('temperature' in (a.calls.lastClaude ?? {})), 'no sampling params (rejected by Sonnet 5.5)');
+
+  const b = makeFetch();
+  await handle(post({ prompt: PROMPT }), { ...env, model: 'claude-sonnet-4-6' }, b.f);
+  ok(!('thinking' in (b.calls.lastClaude ?? {})), 'no thinking field for other models');
 });
