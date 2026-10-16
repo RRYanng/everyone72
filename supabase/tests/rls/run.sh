@@ -44,6 +44,12 @@ for f in "$MIG"/*.sql; do
   out=$(psql_su < "$f") || { echo "$out" | grep -E "ERROR|错误" ; echo "迁移失败: $f"; exit 2; }
 done
 
+# 幂等性:发布迁移必须能重复执行而不报错
+for f in "$MIG"/*_realtime_outing_comments.sql; do
+  echo "▶ 二次应用 $(basename "$f")(幂等性检查)"
+  psql_su < "$f" >/dev/null || { echo "二次应用失败,迁移不是幂等的: $f"; exit 2; }
+done
+
 # as <A|B|C|ANON> "<sql>"  → 以该身份在一个回滚事务里执行,输出结果或错误
 as() {
   local who=$1 sql=$2 uid role=authenticated

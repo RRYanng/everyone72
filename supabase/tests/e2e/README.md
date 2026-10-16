@@ -11,8 +11,7 @@ mkdir -p /tmp/e72-e2e && cd /tmp/e72-e2e && npx supabase init
 mkdir -p supabase/migrations
 cp <repo>/supabase/tests/rls/baseline_live_public.sql supabase/migrations/20200101000000_baseline.sql
 cp <repo>/supabase/migrations/*.sql supabase/migrations/
-echo "alter publication supabase_realtime add table public.outing_comments;" \
-  > supabase/migrations/20261016109999_local_only_realtime.sql   # 线上需在 Dashboard 里确认已开启
+# (outing_comments 加入 supabase_realtime 发布已经在迁移 20261016120000 里,不用再手工加)
 
 # 2. 只启动需要的服务
 npx supabase start -x studio,imgproxy,logflare,vector,mailpit,postgres-meta,storage-api,supavisor

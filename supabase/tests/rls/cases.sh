@@ -151,3 +151,11 @@ expect "申请人本人能看到自己的 pending" B \
   "$SU insert into outing_members(outing_id,user_id,status) values ('$O','$B','pending'); $BACK select count(*) from outing_members where user_id=auth.uid() and status='pending';" "1"
 expect "另一个 pending 申请人看不到别人的 pending" B \
   "$SU insert into outing_members(outing_id,user_id,status) values ('$O','$B','pending'),('$O','$C','pending'); $BACK select count(*) from outing_members where outing_id='$O' and status='pending';" "1"
+
+echo "── realtime 发布 ──"
+expect "outing_comments 在 supabase_realtime 发布里" A \
+  "reset role; select exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='outing_comments');" "t"
+expect "只加了这一张业务表(不会把 profiles 等意外加进去)" A \
+  "reset role; select string_agg(tablename, ',' order by tablename) from pg_publication_tables where pubname='supabase_realtime' and schemaname='public';" "outing_comments"
+expect "发布里恰好一行 outing_comments(没有重复加入)" A \
+  "reset role; select count(*) from pg_publication_tables where pubname='supabase_realtime' and tablename='outing_comments';" "1"
