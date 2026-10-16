@@ -67,7 +67,9 @@ BACK="set local session_replication_role = origin; set local role authenticated;
 expect() {
   local desc=$1 who=$2 sql=$3 want=$4 got
   got=$(as "$who" "$sql")
-  if grep -qF -- "$want" <<<"$got"; then PASS=$((PASS+1)); printf "  ✅ %s\n" "$desc"
+  # 短期望值(t / 0 / 1 …)要求"整行精确匹配",否则任何含该字符的报错都会误判通过
+  local mode=-F; [ "${#want}" -le 3 ] && mode=-xF
+  if grep -q $mode -- "$want" <<<"$got"; then PASS=$((PASS+1)); printf "  ✅ %s\n" "$desc"
   else FAIL=$((FAIL+1)); printf "  ❌ %s\n       想要包含: %s\n       实际输出: %s\n" "$desc" "$want" "$(head -3 <<<"$got")"; fi
 }
 # expect_not: 输出不得包含

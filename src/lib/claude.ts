@@ -12,6 +12,58 @@
 import { supabase } from './supabase';
 import { Round, HoleScore, Course, TroubleStats } from '../types';
 
+// ── Edge Function 调用 ────────────────────────────────────────────────────────
+// 失败一律抛 AIError,由界面显示真实状态并允许重试。
+// 之前这里会悄悄退回本地模板,而调用方又把模板当成 AI 分析写进了数据库
+// (rounds.ai_feedback / practice_plans),用户看到的"AI 建议"其实是固定文案。
+export type AIErrorCode =
+  | 'quota_exceeded'   // 今日额度用完
+  | 'unauthorized'     // 登录失效
+  | 'ai_unavailable'   // 上游暂时不可用 / 超时 / 网络
+  | 'ai_error';        // 上游返回了无法使用的内容
+
+export class AIError extends Error {
+  constructor(public code: AIErrorCode, message?: string) {
+    super(message ?? code);
+    this.name = 'AIError';
+  }
+}
+
+export function aiErrorMessage(err: unknown): string {
+  const code = err instanceof AIError ? err.code : 'ai_unavailable';
+  switch (code) {
+    case 'quota_exceeded': return "You've reached today's AI coach limit. It resets tomorrow.";
+    case 'unauthorized':   return 'Your session expired. Please sign in again.';
+    default:               return 'The AI coach is unavailable right now. Please try again in a moment.';
+  }
+}
+
+export type AIKind = 'analysis' | 'plan' | 'diagnosis' | 'trouble';
+
+async function invokeAI(kind: AIKind, prompt: string): Promise<{ text: string; truncated: boolean }> {
+  const { data, error } = await supabase.functions.invoke('analyze-round', { body: { prompt, kind } });
+
+  if (error) {
+    let code: AIErrorCode = 'ai_unavailable';
+    // FunctionsHttpError 的 context 是原始 Response,里面有服务端给的 code
+    const ctx = (error as { context?: unknown }).context;
+    if (ctx && typeof (ctx as Response).json === 'function') {
+      try {
+        const body = await (ctx as Response).json();
+        if (body?.code === 'quota_exceeded' || body?.code === 'unauthorized' || body?.code === 'ai_error') {
+          code = body.code;
+        }
+      } catch { /* 响应体不是 JSON,保持 ai_unavailable */ }
+    }
+    console.warn('[Claude] Edge Function error:', code);
+    throw new AIError(code);
+  }
+
+  const analysis = (data as { analysis?: unknown } | null)?.analysis;
+  if (typeof analysis !== 'string' || !analysis.trim()) throw new AIError('ai_error');
+  return { text: analysis, truncated: !!(data as { truncated?: boolean }).truncated };
+}
+
 // ── Prompt Builder ────────────────────────────────────────────────────────────
 export function buildPrompt(round: Round, holeScores: HoleScore[], course: Course): string {
   const scoreTable = holeScores
@@ -53,59 +105,15 @@ Analysis (80–120 words, English, encouraging but honest):
 4. **Practice Tips** — 2-3 specific drills targeting the weaknesses shown`;
 }
 
-// ── Offline Fallback (web preview / no network) ───────────────────────────────
-function generateOfflineFeedback(round: Round, holeScores: HoleScore[], course: Course): string {
-  const diff = round.score_vs_par;
-  const avgPutts = (round.total_putts / holeScores.length).toFixed(1);
-  const worstHole    = holeScores.reduce((a, b) => (b.strokes - b.par) > (a.strokes - a.par) ? b : a);
-  const bestHole     = holeScores.reduce((a, b) => (b.strokes - b.par) < (a.strokes - a.par) ? b : a);
-  const highPuttHoles = holeScores.filter(h => h.putts >= 3);
-  const troubleHoles  = holeScores.filter(h => h.troubles && h.troubles.length > 0);
-
-  const assessment = diff <= 0
-    ? `Great round! Shooting ${round.total_strokes} at ${course.name} (rated ${course.course_rating}) is impressive.`
-    : diff <= 10
-    ? `Solid round at ${course.name}. ${round.total_strokes} (+${diff}) on a ${course.course_rating}-rated course shows consistent play.`
-    : `${course.name} (rating ${course.course_rating}) is challenging. A ${round.total_strokes} leaves clear room to improve.`;
-
-  const puttNote = highPuttHoles.length > 0
-    ? `🚨 Putting was a serious issue: ${highPuttHoles.map(h => `#${h.hole_number} took ${h.putts} putts`).join(', ')}. Priority #1 is eliminating 3-putts through lag putting practice.`
-    : parseFloat(avgPutts) <= 1.8
-    ? `Putting was a strength — ${round.total_putts} total putts is excellent.`
-    : `Putting averaged ${avgPutts}/hole (${round.total_putts} total). Work on lag putting to reduce 3-putt risks.`;
-
-  const troubleNote = troubleHoles.length > 0
-    ? ` Trouble spots: ${troubleHoles.map(h => `hole #${h.hole_number} (${h.troubles!.join('+')})`).join(', ')} — practice these specific situations.`
-    : '';
-
-  return `${assessment} ${puttNote}${troubleNote} Best: #${bestHole.hole_number}. Toughest: #${worstHole.hole_number} (+${worstHole.strokes - worstHole.par}).
-
-⚠️ AI Coach (web preview mode) — Install on your phone for full Claude-powered analysis.`;
-}
-
 // ── Main Export: analyzeRound ─────────────────────────────────────────────────
 export async function analyzeRound(
   round: Round,
   holeScores: HoleScore[],
   course: Course
 ): Promise<string> {
-  // Web + Native 均通过 Supabase Edge Function 调用 Claude（无 CORS 问题）
   const prompt = buildPrompt(round, holeScores, course);
-  console.log('[Claude] Calling via Supabase Edge Function...');
-
-  const { data, error } = await supabase.functions.invoke('analyze-round', {
-    body: { prompt },
-  });
-
-  if (error) {
-    console.error('[Claude] Edge Function error:', error);
-    // 降级到本地分析
-    console.warn('[Claude] Falling back to offline analysis');
-    return generateOfflineFeedback(round, holeScores, course);
-  }
-
-  console.log('[Claude] Analysis received successfully');
-  return (data as { analysis: string }).analysis;
+  const { text } = await invokeAI('analysis', prompt);
+  return text;
 }
 
 // ── generatePracticePlan ──────────────────────────────────────────────────────
@@ -161,35 +169,8 @@ Generate a practical 7-day practice plan. Format EXACTLY like this:
 
 Keep each day's instruction to 1-2 sentences. Be specific with numbers (minutes, balls, distances). Total response: 150-200 words.`;
 
-  const { data, error } = await supabase.functions.invoke('analyze-round', {
-    body: { prompt },
-  });
-
-  if (error || !data) {
-    console.warn('[Claude] Practice plan generation failed, using fallback');
-    return generateOfflinePracticePlan(round, holeScores);
-  }
-  return (data as { analysis: string }).analysis;
-}
-
-function generateOfflinePracticePlan(round: Round, holeScores: HoleScore[]): string {
-  const highPuttHoles = holeScores.filter(h => h.putts >= 3);
-  const needsPutting  = highPuttHoles.length >= 2;
-  const focus = needsPutting ? 'Putting & Short Game' : 'Ball Striking & Course Management';
-
-  return `**🎯 This Week's Focus:** ${focus}
-
-**📅 Your Practice Schedule:**
-
-**Mon** — ${needsPutting ? '30 min putting: 10 putts each from 3ft, 6ft, 10ft. Focus on pace control.' : '40 balls with 7-iron: slow backswing, pause at top, focus on clean contact.'}
-**Tue** — Rest day. Watch one swing tip video.
-**Wed** — ${needsPutting ? '20 min lag putting from 25+ feet. Goal: all putts within 3 feet.' : '20 min chipping from tight lies, 10-15 yards. Land ball on fringe, let it roll.'}
-**Thu** — 30 min range: 10 balls each with PW, 8i, 6i, 4i. Track misses (left/right).
-**Fri** — Rest or 15 min putting green.
-**Sat** — Pre-round warmup: 5 min stretch, 10 putts, 10 chips, 5 full swings.
-**Sun** — On-course goal: max 2 putts per green, no penalty shots.
-
-**💡 Key Tip:** ${needsPutting ? 'For lag putting, focus on distance first — direction follows when speed is right.' : 'Start your downswing with your hips, not your hands.'}`;
+  const { text } = await invokeAI('plan', prompt);
+  return text;
 }
 
 // ── generateDiagnosisReport ───────────────────────────────────────────────────
@@ -300,62 +281,16 @@ One targeted drill/intervention per hypothesis. Include: drill name, exact proto
 Do not use any other headers or formatting outside of these four sections.`;
 }
 
-function generateOfflineDiagnosis(rounds: Round[], allHoleScores: HoleScore[]): DiagnosisReport {
-  const n = rounds.length;
-  const avgScoreVsPar = +(rounds.reduce((s, r) => s + r.score_vs_par, 0) / n).toFixed(1);
-  const avgPutts      = +(rounds.reduce((s, r) => s + r.total_putts, 0) / n).toFixed(1);
-  const threePutts    = allHoleScores.filter(h => h.putts >= 3).length;
-  const troubles      = allHoleScores.flatMap(h => h.troubles ?? []);
-  const tTotal        = troubles.length;
-  const tBunker       = troubles.filter(t => t === 'bunker').length;
-  const tWater        = troubles.filter(t => t === 'water').length;
-  const topIssue      = avgPutts > 34 ? 'putting' : tTotal / n > 3 ? 'course management' : 'ball striking';
-
-  const raw = `<<CORE_ISSUE>>
-Based on ${n} rounds, your biggest issue is ${topIssue}. Averaging ${avgScoreVsPar > 0 ? '+' : ''}${avgScoreVsPar} per round with ${avgPutts} putts/round, the data points to strokes being lost ${topIssue === 'putting' ? 'on the greens' : 'in hazards and rough'}.
-
-<<DATA_EVIDENCE>>
-• Average score vs par: ${avgScoreVsPar > 0 ? '+' : ''}${avgScoreVsPar} (bogey golfer benchmark: +18)
-• Average putts per round: ${avgPutts} (amateur average: 33–36)
-• 3-putt incidents: ${threePutts} over ${n} rounds (${+(threePutts / n).toFixed(1)}/round)
-• Trouble incidents: ${+(tTotal / n).toFixed(1)}/round (bunkers: ${tBunker}, water: ${tWater})
-
-<<ROOT_CAUSE>>
-Hypothesis 1: Distance Control — Approach shots leaving putts from 30+ feet, making 3-putts inevitable.
-Hypothesis 2: Club Selection — Aggressive plays near water/bunkers increasing penalty risk.
-Hypothesis 3: Pre-Shot Routine — Inconsistent alignment causing directional errors in key moments.
-
-<<PRACTICE_PLAN>>
-Fix for Hypothesis 1: Lag Putting Ladder — 10 putts each from 20ft, 30ft, 40ft. Goal: all stop within 3ft. 3×/week, 20 min.
-Fix for Hypothesis 2: Course Management Review — Before each round, mark 2 holes where you will lay up regardless. Track whether that changes your score on those holes.
-Fix for Hypothesis 3: Alignment Stick Drill — Place 2 sticks on range to frame your stance. 50 balls/session until setup is automatic.`;
-
-  return parseDiagnosisReport(raw);
-}
-
 export async function generateDiagnosisReport(
   rounds: Round[],
   allHoleScores: HoleScore[]
 ): Promise<DiagnosisReport> {
   const prompt = buildDiagnosisPrompt(rounds, allHoleScores);
+  const { text } = await invokeAI('diagnosis', prompt);
+  const report = parseDiagnosisReport(text);
 
-  const { data, error } = await supabase.functions.invoke('analyze-round', {
-    body: { prompt },
-  });
-
-  if (error || !data) {
-    console.warn('[Claude] Diagnosis generation failed, using offline fallback');
-    return generateOfflineDiagnosis(rounds, allHoleScores);
-  }
-
-  const raw = (data as { analysis: string }).analysis;
-  const report = parseDiagnosisReport(raw);
-
-  // Fallback: if parsing failed (empty sections), use offline
-  if (!report.coreIssue && !report.dataEvidence) {
-    return generateOfflineDiagnosis(rounds, allHoleScores);
-  }
-
+  // 模型没按约定的 <<SECTION>> 格式返回 → 当作失败,而不是展示一份空报告
+  if (!report.coreIssue && !report.dataEvidence) throw new AIError('ai_error');
   return report;
 }
 
@@ -365,10 +300,6 @@ export async function generateTroubleInsights(stats: TroubleStats): Promise<stri
   const total = stats.water + stats.ob + stats.bunker + stats.rough + stats.other;
   if (total === 0) return '';
 
-  const topTrouble = Object.entries({
-    water: stats.water, ob: stats.ob,
-    bunker: stats.bunker, rough: stats.rough, other: stats.other,
-  }).sort((a, b) => b[1] - a[1]).filter(e => e[1] > 0);
 
   const prompt = `You are a strategic golf coach. Analyze this player's trouble pattern from their last ${stats.totalRounds} rounds and give tactical advice.
 
@@ -394,28 +325,6 @@ Give 3 specific tactical strategies to reduce trouble. Format:
 
 Be concrete (mention specific clubs, distances, targets). Total: 80-100 words.`;
 
-  const { data, error } = await supabase.functions.invoke('analyze-round', {
-    body: { prompt },
-  });
-
-  if (error || !data) return generateOfflineTroubleAdvice(stats, topTrouble);
-  return (data as { analysis: string }).analysis;
-}
-
-function generateOfflineTroubleAdvice(
-  stats: TroubleStats,
-  topTrouble: [string, number][]
-): string {
-  const top = topTrouble[0]?.[0] ?? 'rough';
-  const adviceMap: Record<string, string> = {
-    water: 'Aim 20-30 yards away from water on approach shots. Club down one level for more control.',
-    ob: 'Tee off with a 3-wood or hybrid instead of driver on tight holes. Prioritize fairway over distance.',
-    bunker: 'When in doubt, aim for the fat of the green away from bunkers. A center-green bogey beats a sand save attempt.',
-    rough: 'From rough above ankle height, take one extra club and make a steeper swing. Never try to muscle a long iron.',
-    other: 'Play within your comfort zone. A conservative par is worth more than an aggressive double.',
-  };
-
-  return `**1. Avoid Your #1 Hazard** — ${adviceMap[top]}
-**2. Par 5 Strategy** — ${stats.byPar.par5 > stats.byPar.par4 ? 'Lay up to your comfortable yardage on par 5 second shots. Attack the pin only from the fairway.' : 'On par 4s, pick a specific target in the fairway, not just "fairway". Narrow your focus.'}
-**3. Pre-Shot Routine** — Before every shot with potential trouble, pick a safe bailout area first, then decide if the aggressive shot is worth the risk.`;
+  const { text } = await invokeAI('trouble', prompt);
+  return text;
 }

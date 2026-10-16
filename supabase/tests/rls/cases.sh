@@ -113,11 +113,29 @@ expect "缺字段(strokes 为 null)被拒绝" A \
   "select save_round($COURSE,'White',current_date,(select jsonb_agg(case when g=2 then jsonb_build_object('hole_number',g,'par',4,'putts',2) else jsonb_build_object('hole_number',g,'par',4,'strokes',5,'putts',2) end) from generate_series(1,9) g));" "invalid_holes"
 expect "非法 troubles 值被拒绝" A \
   "select save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',5,'putts',2,'troubles','[\"lava\"]'::jsonb)) from generate_series(1,9) g));" "invalid_holes"
-expect "失败的保存不留下 round(原子性)" A \
-  "do \$\$ begin perform save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',case when g=9 then 99 else 5 end,'putts',2)) from generate_series(1,9) g)); exception when others then null; end \$\$; select count(*) from rounds;" "0"
+expect "失败的保存不留下 round(原子性):前后 round 数量不变" A \
+  "reset role; select count(*) as before from rounds \\gset
+   set local role authenticated;
+   do \$\$ begin perform save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',case when g=9 then 99 else 5 end,'putts',2)) from generate_series(1,9) g)); exception when others then null; end \$\$;
+   reset role; select count(*) = :before from rounds;" "t"
 expect "用户看不到别人的成绩" B \
   "reset role; insert into rounds(user_id,course_id,total_strokes) values ('$A','c1',80); set local role authenticated; select count(*) from rounds;" "0"
 expect "保存的 round 属于调用者" B \
   "select save_round($COURSE,'White',current_date,$H9) as id \\gset
    reset role; select user_id = '$B' from rounds where id = :'id';" "t"
 expect "匿名/PUBLIC 不能执行 save_round" A "select has_function_privilege('anon','public.save_round(jsonb,text,date,jsonb)','execute') || '|' || has_function_privilege('authenticated','public.save_round(jsonb,text,date,jsonb)','execute');" "false|true"
+
+echo "── ai_usage / consume_ai_quota ──"
+expect "额度内返回 true,用满后返回 false 且不再累加" A \
+  "reset role; select consume_ai_quota('$A',2) || ',' || consume_ai_quota('$A',2) || ',' || consume_ai_quota('$A',2) || ',' || consume_ai_quota('$A',2); select calls from ai_usage where user_id='$A';" "true,true,false,false"
+expect "用满后计数停在上限(2)" A \
+  "reset role; select consume_ai_quota('$A',2), consume_ai_quota('$A',2), consume_ai_quota('$A',2); select calls from ai_usage where user_id='$A';" "2"
+expect "不同用户额度互不影响" B "reset role; select consume_ai_quota('$A',1), consume_ai_quota('$A',1), consume_ai_quota('$B',1);" "t|f|t"
+expect "登录用户不能直接读 ai_usage" A "select count(*) from ai_usage;" "permission denied"
+expect "登录用户不能直接改 ai_usage" A "update ai_usage set calls = 0;" "permission denied"
+expect "只有 service_role 能执行 consume_ai_quota" A \
+  "select has_function_privilege('anon','public.consume_ai_quota(uuid,int)','execute') || '|' || has_function_privilege('authenticated','public.consume_ai_quota(uuid,int)','execute') || '|' || has_function_privilege('service_role','public.consume_ai_quota(uuid,int)','execute');" "false|false|true"
+
+echo "── 数据清理:离线兜底文案 ──"
+expect "带 web preview mode 标记的 ai_feedback 被清空" A "reset role; select ai_feedback is null from rounds where id='55555555-0000-0000-0000-000000000001';" "t"
+expect "真实的 AI 分析保持不变" A "reset role; select ai_feedback from rounds where id='55555555-0000-0000-0000-000000000002';" "putting cost you"

@@ -14,11 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 
 import { supabase } from '../../lib/supabase';
-import { analyzeRound, generatePracticePlan } from '../../lib/claude';
+import { analyzeRound, generatePracticePlan, aiErrorMessage } from '../../lib/claude';
 import { Round, HoleScore, Course, PracticePlan } from '../../types';
 import { COURSES } from '../../data/courses';
 import { RootStackParamList } from '../../navigation';
-import { Card, ScreenHeader, LoadingSpinner } from '../../components';
+import { Card, ScreenHeader, LoadingSpinner, SecondaryButton } from '../../components';
 import {
   isDevMockActive, getLastMockRound, MOCK_ANALYSIS_FEEDBACK, MOCK_ACTIVE_PLAN,
 } from '../../lib/mockUser';
@@ -96,6 +96,7 @@ export default function AnalysisScreen() {
   const [feedback, setFeedback] = useState<string>('');
   const [loadingData, setLoadingData] = useState(true);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [aiError, setAiError] = useState('');
   const [practicePlan, setPracticePlan] = useState<string>('');
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [planSaved, setPlanSaved] = useState(false);
@@ -187,6 +188,7 @@ export default function AnalysisScreen() {
 
   const runAIAnalysis = async (r: Round, holes: HoleScore[], c: Course) => {
     setLoadingAI(true);
+    setAiError('');
     try {
       const result = await analyzeRound(r, holes, c);
       setFeedback(result);
@@ -198,17 +200,18 @@ export default function AnalysisScreen() {
         Animated.timing(cardSlide, { toValue: 0, duration: 400, useNativeDriver: true }),
       ]).start();
 
-      // 保存 AI 分析结果到数据库
-      await supabase
+      // 只有拿到真实的 AI 结果才写库;失败时不存任何占位文案
+      const { error: saveErr } = await supabase
         .from('rounds')
         .update({ ai_feedback: result })
         .eq('id', r.id);
+      if (saveErr) console.warn('[Analysis] could not cache ai_feedback:', saveErr.message);
 
       // 生成练习计划（不阻塞主分析显示）
       generateAndSavePlan(r, holes, c, result);
     } catch (err) {
-      console.error('AI analysis error:', err);
-      setFeedback('Unable to generate AI analysis. Please check your API key and try again.');
+      console.warn('[Analysis] AI analysis failed:', err);
+      setAiError(aiErrorMessage(err));
     }
     setLoadingAI(false);
   };
@@ -328,6 +331,17 @@ export default function AnalysisScreen() {
             <View style={styles.aiLoading}>
               <ActivityIndicator color={colors.koke} />
               <Text style={styles.aiLoadingText}>Analyzing your round...</Text>
+            </View>
+          ) : aiError ? (
+            <View>
+              <Text style={styles.aiFeedback}>{aiError}</Text>
+              {round && course && holeScores.length > 0 ? (
+                <SecondaryButton
+                  label="Try again"
+                  onPress={() => runAIAnalysis(round, holeScores, course)}
+                  style={{ marginTop: spacing.md }}
+                />
+              ) : null}
             </View>
           ) : (
             <Animated.View style={{ opacity: feedbackOpacity, transform: [{ translateY: cardSlide }] }}>

@@ -16,3 +16,7 @@ insert into public.friendships (id,user_id,friend_id,status) values ('33333333-0
 insert into public.practice_logs (id,user_id,note) values ('44444444-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','range day') on conflict do nothing;
 insert into public.reactions (practice_log_id,user_id,type) values ('44444444-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000002','like') on conflict do nothing;
 insert into public.user_stats (user_id,current_streak) values ('aaaaaaaa-0000-0000-0000-000000000001',3) on conflict (user_id) do update set current_streak = 3;
+insert into public.rounds (id,user_id,course_id,total_strokes,total_putts,score_vs_par,ai_feedback) values
+ ('55555555-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','c1',90,36,18,E'Solid round.\n\n⚠️ AI Coach (web preview mode) — Install on your phone for full Claude-powered analysis.'),
+ ('55555555-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000001','c1',85,33,13,'Your putting cost you 4 strokes today.')
+on conflict do nothing;

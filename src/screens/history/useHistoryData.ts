@@ -13,7 +13,7 @@ import {
 } from '../../lib/mockUser';
 import { Round, HoleScore, TroubleStats } from '../../types';
 import {
-  generateTroubleInsights, generateDiagnosisReport, DiagnosisReport,
+  generateTroubleInsights, generateDiagnosisReport, DiagnosisReport, aiErrorMessage,
 } from '../../lib/claude';
 
 const MIN_ROUNDS_FOR_DIAGNOSIS = 5;
@@ -161,10 +161,12 @@ export function useHistoryData() {
     try {
       const report = await generateDiagnosisReport(diagRounds, allHoles);
       setDiagnosisReport(report);
-    } catch {
-      setDiagnosisError('Could not generate diagnosis. Check your connection and try again.');
+      setDiagnosisFetched(true);
+    } catch (err) {
+      // 失败时不标记 fetched:HistoryScreen 的重试是 reset 后立刻 fetch,
+      // 若这里仍是 true,fetchDiagnosis 会读到旧值直接 return,重试无效。
+      setDiagnosisError(aiErrorMessage(err));
     }
-    setDiagnosisFetched(true);
     setLoadingDiagnosis(false);
   };
 
