@@ -1,11 +1,13 @@
 // ============================================================
-// 通知工具模块
-// - Web：调用 showToast（全局 banner）
-// - 真机：调用 expo-notifications 系统推送
+// 通知工具模块 —— 目前只负责真机的推送权限申请。
+//
+// 之前这里有 notifyFriendRequest / notifyFriendRequestAccepted /
+// notifyFriendPracticed:它们只会在**操作者自己**的设备上弹一条本地提示
+// ("X 向你发来好友请求"出现在发请求的人屏幕上),并不会通知对方,已删除。
+// 真正通知对方需要服务端推送(存 push token + Edge Function 发送)。
 // ============================================================
 
 import { Platform } from 'react-native';
-import { showToast } from '../components/Toast';
 
 // 真机上懒加载 expo-notifications（Web bundle 不引入）
 let Notifications: any = null;
@@ -40,27 +42,3 @@ export async function registerForPushNotifications(): Promise<string | null> {
     return null;
   }
 }
-
-// ── 辅助：发本地通知 or Toast ───────────────────────────────
-async function notify(title: string, body: string, type: 'info' | 'success' | 'warning' = 'info') {
-  if (Platform.OS === 'web') {
-    showToast(body, type);
-    return;
-  }
-  try {
-    const N = await getNotifications();
-    await N?.scheduleNotificationAsync({ content: { title, body }, trigger: null });
-  } catch {
-    showToast(body, type);
-  }
-}
-
-// ── 公开通知方法 ─────────────────────────────────────────────
-export const notifyFriendPracticed = (friendName: string) =>
-  notify('Friend Activity', `${friendName} just logged a practice session! 🏌️`, 'info');
-
-export const notifyFriendRequest = (fromName: string) =>
-  notify('Friend Request', `${fromName} sent you a friend request!`, 'success');
-
-export const notifyFriendRequestAccepted = (fromName: string) =>
-  notify('Friend Request Accepted', `${fromName} accepted your friend request! 🎉`, 'success');

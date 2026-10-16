@@ -16,7 +16,6 @@ import { RootStackParamList } from '../../navigation';
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { notifyFriendRequest, notifyFriendRequestAccepted } from '../../lib/notifications';
 
 interface FriendEntry {
   id: string;
@@ -132,17 +131,14 @@ export default function FriendsScreen() {
       setSearchResult(null);
       setSearchQuery('');
       fetchFriends();
-      // 通知对方（本机 Toast 模拟；真机可接入 Supabase Edge Function 推送给对方）
-      notifyFriendRequest(searchResult?.username ?? 'Someone');
     }
     setSendingRequest(false);
   };
 
   // ── 接受好友请求 ────────────────────────────────────────────
-  const acceptRequest = async (friendshipId: string, fromUsername: string) => {
+  const acceptRequest = async (friendshipId: string) => {
     const { error } = await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
     if (error) { notify('Error', 'Could not accept the request. Please try again.'); return; }
-    notifyFriendRequestAccepted(fromUsername);
     fetchFriends();
   };
 
@@ -231,7 +227,7 @@ export default function FriendsScreen() {
                     </View>
                     <Text style={styles.friendName}>@{f.username}</Text>
                     <View style={styles.requestActions}>
-                      <TouchableOpacity style={styles.acceptBtn} onPress={() => acceptRequest(f.friendshipId, f.username)}>
+                      <TouchableOpacity style={styles.acceptBtn} onPress={() => acceptRequest(f.friendshipId)}>
                         <Text style={styles.acceptBtnText}>Accept</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.rejectBtn} onPress={() => removeFriend(f.friendshipId)}>
