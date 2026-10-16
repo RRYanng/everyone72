@@ -708,6 +708,48 @@ const styles = StyleSheet.create({
   streakBadge: { fontSize: typography.base },
 
   // ── Start New Round
+  // ── 横幅:未完成的记分卡草稿 / 加载失败重试
+  draftBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.shiro,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.kincha,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.md,
+  },
+  draftBannerContent: { flex: 1 },
+  draftBannerTitle: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  draftBannerSub: {
+    fontSize: typography.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.shiro,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.aka,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.md,
+  },
+  errorBannerTitle: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.aka,
+  },
+
   startBtn: {
     height: 56,
     borderRadius: 28,
