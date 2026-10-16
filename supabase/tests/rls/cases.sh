@@ -87,3 +87,37 @@ expect "profiles 本表仍然只能看自己" B "select count(*) from profiles w
 expect "匿名无权读 public_profiles,登录用户有权" A \
   "select has_table_privilege('anon','public.public_profiles','select') || '|' || has_table_privilege('authenticated','public.public_profiles','select');" "false|true"
 expect "登录用户不能通过视图写 profiles" B "update public_profiles set username='hax' where id='$B';" "permission denied"
+
+echo "── save_round ──"
+COURSE="jsonb_build_object('id','c1','name','Test GC','city','Irvine','state','CA','course_rating',99.9,'slope_rating',999,'total_par',72)"
+H9="(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',5,'putts',2,'troubles','[\"bunker\"]'::jsonb) order by g) from generate_series(1,9) g)"
+expect "9 洞合法成绩保存成功,总杆/推杆/相对标准杆由服务端汇总" A \
+  "select save_round($COURSE,'White',current_date,$H9) as id \\gset
+   select total_strokes||'/'||total_putts||'/'||score_vs_par||'/'||total_holes from rounds where id = :'id';" "45/18/9/9"
+expect "逐洞数据和 troubles 一并写入" A \
+  "select save_round($COURSE,'White',current_date,$H9) as id \\gset
+   select count(*)||'/'||(select count(*) from hole_scores where round_id=:'id' and troubles = '{bunker}') from hole_scores where round_id = :'id';" "9/9"
+expect "已存在的球场不会被覆盖(评分仍是 72.0)" A \
+  "select save_round($COURSE,'White',current_date,$H9); select course_rating from courses where id='c1';" "72.0"
+expect "新球场会被插入" A \
+  "select save_round(jsonb_build_object('id','new-course','name','New','course_rating',70.1,'slope_rating',120,'total_par',72),'Blue',current_date,$H9); select name from courses where id='new-course';" "New"
+expect "非法杆数(0)被拒绝,且不留下半成品 round" A \
+  "select save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',case when g=3 then 0 else 5 end,'putts',2,'troubles','[]'::jsonb)) from generate_series(1,9) g));" "invalid_holes"
+expect "推杆多于杆数被拒绝" A \
+  "select save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',2,'putts',3,'troubles','[]'::jsonb)) from generate_series(1,9) g));" "invalid_holes"
+expect "洞数不是 9/18 被拒绝" A \
+  "select save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',5,'putts',2)) from generate_series(1,10) g));" "invalid_holes"
+expect "洞号重复被拒绝" A \
+  "select save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',1,'par',4,'strokes',5,'putts',2)) from generate_series(1,9) g));" "invalid_holes"
+expect "缺字段(strokes 为 null)被拒绝" A \
+  "select save_round($COURSE,'White',current_date,(select jsonb_agg(case when g=2 then jsonb_build_object('hole_number',g,'par',4,'putts',2) else jsonb_build_object('hole_number',g,'par',4,'strokes',5,'putts',2) end) from generate_series(1,9) g));" "invalid_holes"
+expect "非法 troubles 值被拒绝" A \
+  "select save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',5,'putts',2,'troubles','[\"lava\"]'::jsonb)) from generate_series(1,9) g));" "invalid_holes"
+expect "失败的保存不留下 round(原子性)" A \
+  "do \$\$ begin perform save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',case when g=9 then 99 else 5 end,'putts',2)) from generate_series(1,9) g)); exception when others then null; end \$\$; select count(*) from rounds;" "0"
+expect "用户看不到别人的成绩" B \
+  "reset role; insert into rounds(user_id,course_id,total_strokes) values ('$A','c1',80); set local role authenticated; select count(*) from rounds;" "0"
+expect "保存的 round 属于调用者" B \
+  "select save_round($COURSE,'White',current_date,$H9) as id \\gset
+   reset role; select user_id = '$B' from rounds where id = :'id';" "t"
+expect "匿名/PUBLIC 不能执行 save_round" A "select has_function_privilege('anon','public.save_round(jsonb,text,date,jsonb)','execute') || '|' || has_function_privilege('authenticated','public.save_round(jsonb,text,date,jsonb)','execute');" "false|true"

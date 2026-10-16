@@ -21,6 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useScorecardDraft, ScorecardDraft } from '../../hooks/useScorecardDraft';
 import { isDevMockActive, setLastMockRound } from '../../lib/mockUser';
+import { localDateString } from '../../lib/date';
 import { COURSES } from '../../data/courses';
 import { HoleScore } from '../../types';
 import { RootStackParamList } from '../../navigation';
@@ -237,32 +238,32 @@ export default function ScorecardScreen() {
     setSaving(true);
     setSaveError('');
     try {
-      await supabase.from('courses').upsert({
-        id: course.id, name: course.name, city: course.city, state: course.state,
-        course_rating: course.course_rating, slope_rating: course.slope_rating,
-        total_par: course.total_par,
-      });
-      const { data: roundData, error: roundErr } = await supabase
-        .from('rounds')
-        .insert({
-          user_id: user.id, course_id: course.id,
-          date: new Date().toISOString().split('T')[0],
-          tee_box: teeBox, total_holes: totalHoles,
-          total_strokes: totalStrokes, total_putts: totalPutts, score_vs_par: scoreVsPar,
-        })
-        .select().single();
-      if (roundErr || !roundData) throw new Error(roundErr?.message ?? 'Failed to create round');
-
-      await supabase.from('hole_scores').insert(
-        scores.map(s => ({
-          round_id: roundData.id, hole_number: s.hole_number,
-          par: s.par, strokes: s.strokes, putts: s.putts,
+      // 服务端单事务保存:球场 + round + 逐洞成绩。总杆/推杆由服务端汇总。
+      // 只有服务端确认成功后才清草稿,失败时用户的数据原样保留。
+      const { data: roundId, error: saveErr } = await supabase.rpc('save_round', {
+        p_course: {
+          id: course.id, name: course.name, city: course.city, state: course.state,
+          course_rating: course.course_rating, slope_rating: course.slope_rating,
+          total_par: course.total_par,
+        },
+        p_tee_box: teeBox,
+        p_date:    localDateString(),
+        p_holes:   scores.map(s => ({
+          hole_number: s.hole_number, par: s.par, strokes: s.strokes, putts: s.putts,
           troubles: s.troubles ?? [],
         })),
-      );
+      });
+      if (saveErr || !roundId) {
+        console.error('[Scorecard] save_round error:', saveErr);
+        throw new Error(
+          saveErr?.message === 'invalid_holes'
+            ? 'Some hole scores look invalid. Please check them and try again.'
+            : 'Could not save your round. Your scores are kept — please try again.',
+        );
+      }
       await clearDraft();
       isSubmitted.current = true;
-      navigation.replace('Analysis', { roundId: roundData.id });
+      navigation.replace('Analysis', { roundId: roundId as string });
     } catch (err: any) {
       setSaveError(err?.message ?? 'Save failed. Please try again.');
       setSaving(false);
