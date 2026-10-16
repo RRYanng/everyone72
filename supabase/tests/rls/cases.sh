@@ -139,3 +139,15 @@ expect "只有 service_role 能执行 consume_ai_quota" A \
 echo "── 数据清理:离线兜底文案 ──"
 expect "带 web preview mode 标记的 ai_feedback 被清空" A "reset role; select ai_feedback is null from rounds where id='55555555-0000-0000-0000-000000000001';" "t"
 expect "真实的 AI 分析保持不变" A "reset role; select ai_feedback from rounds where id='55555555-0000-0000-0000-000000000002';" "putting cost you"
+
+echo "── outing_members 可见性(e2e 发现的回归) ──"
+expect "同城非成员能数到已加入的成员(发起人 A)" B "select count(*) from outing_members where outing_id='$O' and status='joined';" "1"
+expect "异地用户仍然看不到成员" C "select count(*) from outing_members where outing_id='$O';" "0"
+expect "别人的 pending 申请,同城非成员看不到" B \
+  "$SU insert into outing_members(outing_id,user_id,status) values ('$O','$C','pending'); $BACK select count(*) from outing_members where outing_id='$O' and status='pending';" "0"
+expect "发起人能看到 pending 申请" A \
+  "$SU insert into outing_members(outing_id,user_id,status) values ('$O','$B','pending'); $BACK select count(*) from outing_members where outing_id='$O' and status='pending';" "1"
+expect "申请人本人能看到自己的 pending" B \
+  "$SU insert into outing_members(outing_id,user_id,status) values ('$O','$B','pending'); $BACK select count(*) from outing_members where user_id=auth.uid() and status='pending';" "1"
+expect "另一个 pending 申请人看不到别人的 pending" B \
+  "$SU insert into outing_members(outing_id,user_id,status) values ('$O','$B','pending'),('$O','$C','pending'); $BACK select count(*) from outing_members where outing_id='$O' and status='pending';" "1"
