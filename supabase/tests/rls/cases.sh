@@ -389,9 +389,9 @@ echo "── courses 服务端权威 ──"
 expect "客户端不能 insert courses" A "insert into courses(id,name) values ('evil','x');" "permission denied"
 expect "客户端不能 update courses" A "update courses set course_rating = 1 where id='torrey-pines-south';" "permission denied"
 expect "客户端不能 delete courses" A "delete from courses where id='torrey-pines-south';" "permission denied"
-expect "匿名和登录用户仍然读得到球场" ANON "select count(*) >= 262 from courses;" "t"
-expect "262 个种子球场都在,每个都有 18 个标准杆" A \
-  "select count(*) from courses where holes_par is not null and array_length(holes_par,1) = 18;" "262"
+expect "匿名和登录用户仍然读得到球场" ANON "select count(*) >= 266 from courses;" "t"
+expect "266 个种子球场都在,每个都有 18 个标准杆" A \
+  "select count(*) from courses where holes_par is not null and array_length(holes_par,1) = 18;" "266"
 expect "每个种子球场的 total_par 等于逐洞标准杆之和" A \
   "select count(*) from courses where holes_par is not null and (select sum(x) from unnest(holes_par) x) <> total_par;" "0"
 TP="(select jsonb_agg(jsonb_build_object('hole_number', g, 'par', holes_par[g], 'strokes', holes_par[g] + 1, 'putts', 2) order by g) from courses, generate_series(1,18) g where id='torrey-pines-south')"

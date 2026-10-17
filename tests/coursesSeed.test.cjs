@@ -12,7 +12,7 @@ test('the course seed in the migration matches src/data/courses.ts exactly', () 
 
 test('every course has 18 pars that add up to total_par, and ids are unique', () => {
   const courses = loadCourses();
-  assert.equal(courses.length, 262);
+  assert.equal(courses.length, 266);
   assert.equal(new Set(courses.map(c => c.id)).size, courses.length);
   for (const c of courses) {
     assert.equal(c.holes.length, 18, c.id);

@@ -7,7 +7,7 @@
 -- 或抢先用一个编造的数据占住某个 id,污染所有人的 handicap 计算。
 --
 -- 现在:
---   * 262 个核实过的球场(含每洞标准杆 holes_par)作为种子写进库里,来源就是客户端的
+--   * 266 个核实过的球场(含每洞标准杆 holes_par)作为种子写进库里,来源就是客户端的
 --     src/data/courses.ts,由脚本生成,测试保证两边一致
 --   * courses 对客户端只读;已有的 7 个球场也会按这份数据校正
 --   * save_round 不再写 courses:球场不存在 → unknown_course;
@@ -21,6 +21,10 @@ alter table public.courses add column if not exists holes_par int[];
 insert into public.courses (id, name, city, state, course_rating, slope_rating, total_par, holes_par) values
   ('torrey-pines-south', 'Torrey Pines Golf Course (South)', 'La Jolla', 'CA', 76.9, 145, 72, array[4,4,3,4,4,5,4,3,5,4,3,4,5,4,4,3,4,5]),
   ('torrey-pines-north', 'Torrey Pines Golf Course (North)', 'La Jolla', 'CA', 72.4, 135, 72, array[4,4,3,4,5,4,4,3,5,5,4,3,4,4,3,4,5,4]),
+  ('pebble-beach', 'Pebble Beach Golf Links', 'Pebble Beach', 'CA', 74.9, 144, 72, array[4,5,4,4,3,5,3,4,4,4,4,3,4,5,4,4,3,5]),
+  ('pelican-hill-north', 'Pelican Hill Golf Club (Ocean North)', 'Newport Coast', 'CA', 73.5, 137, 71, array[5,3,4,4,4,3,4,5,4,4,4,3,4,4,4,3,5,4]),
+  ('pelican-hill-south', 'Pelican Hill Golf Club (Ocean South)', 'Newport Coast', 'CA', 72, 133, 70, array[4,4,4,3,4,4,3,5,4,4,4,3,3,5,4,3,5,4]),
+  ('pga-west-stadium', 'PGA West Stadium Course', 'La Quinta', 'CA', 75.8, 148, 72, array[4,4,4,3,5,3,4,5,4,4,5,4,3,4,4,5,3,4]),
   ('sherwood-cc', 'Sherwood Country Club', 'Thousand Oaks', 'CA', 75.4, 144, 72, array[4,5,3,5,4,3,5,3,4,4,5,3,4,5,4,4,3,4]),
   ('monarch-beach', 'Monarch Beach Golf Links', 'Dana Point', 'CA', 71.9, 130, 70, array[4,4,4,3,3,4,5,4,5,4,4,5,3,4,3,4,3,4]),
   ('palos-verdes-gc', 'Palos Verdes Golf Club', 'Palos Verdes Estates', 'CA', 72.8, 134, 71, array[4,3,4,3,5,4,5,3,4,4,4,4,4,4,3,5,4,4]),

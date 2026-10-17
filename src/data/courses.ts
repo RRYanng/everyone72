@@ -1,5 +1,5 @@
 // Golf Course Database — Verified Scorecards Only
-// 262 verified US golf courses with real hole-by-hole par data
+// 266 verified US golf courses with real hole-by-hole par data
 // All courses sourced from official scorecards / bluegolf.com / USGA database
 import { Course } from '../types';
 
@@ -23,6 +23,26 @@ const RAW: RawCourse[] = [
   // Source: bluegolf.com / USGA database, verified April 2026
   { id: 'torrey-pines-north', name: 'Torrey Pines Golf Course (North)', city: 'La Jolla', state: 'CA', course_rating: 72.4, slope_rating: 135, total_par: 72,
     holes_par: [4,4,3,4,5,4,4,3,5, 5,4,3,4,4,3,4,5,4] },
+  // ── Re-added 2026-10-17: these four were in the hosted database (and in users' saved rounds) but had been
+  //    dropped from this list. Their previously saved hole pars were wrong, so everything here is re-checked
+  //    against published scorecards (GolfPass hole-by-hole tables; the hole pars agree with a second independent
+  //    listing for each). Rating / slope are the longest men's tee, same convention as the entries above.
+  // Pebble Beach Golf Links — par 72, Blue tees 6802 yds, 74.9 / 144
+  // Source: https://www.golfpass.com/courses/15191-pebble-beach-golf-linkstm/scorecard-and-layout
+  { id: 'pebble-beach', name: 'Pebble Beach Golf Links', city: 'Pebble Beach', state: 'CA', course_rating: 74.9, slope_rating: 144, total_par: 72,
+    holes_par: [4,5,4,4,3,5,3,4,4, 4,4,3,4,5,4,4,3,5] },
+  // Pelican Hill Ocean North — par 71, Black tees 6945 yds, 73.5 / 137
+  // Source: https://www.golfpass.com/courses/15464-the-ocean-north-at-pelican-hill-golf-club/scorecard-and-layout
+  { id: 'pelican-hill-north', name: 'Pelican Hill Golf Club (Ocean North)', city: 'Newport Coast', state: 'CA', course_rating: 73.5, slope_rating: 137, total_par: 71,
+    holes_par: [5,3,4,4,4,3,4,5,4, 4,4,3,4,4,4,3,5,4] },
+  // Pelican Hill Ocean South — par 70 (not 71), Black tees 6580 yds, 72.0 / 133
+  // Source: https://www.golfpass.com/courses/15463-the-ocean-south-at-pelican-hill-golf-club/scorecard-and-layout
+  { id: 'pelican-hill-south', name: 'Pelican Hill Golf Club (Ocean South)', city: 'Newport Coast', state: 'CA', course_rating: 72.0, slope_rating: 133, total_par: 70,
+    holes_par: [4,4,4,3,4,4,3,5,4, 4,4,3,3,5,4,3,5,4] },
+  // PGA West Stadium Course — par 72, Black tees 7300 yds, 75.8 / 148
+  // Source: https://www.golfpass.com/courses/14934-the-stadium-course-at-pga-west/scorecard-and-layout
+  { id: 'pga-west-stadium', name: 'PGA West Stadium Course', city: 'La Quinta', state: 'CA', course_rating: 75.8, slope_rating: 148, total_par: 72,
+    holes_par: [4,4,4,3,5,3,4,5,4, 4,5,4,3,4,4,5,3,4] },
   // Source: bluegolf.com / USGA database, verified April 2026
   { id: 'sherwood-cc', name: 'Sherwood Country Club', city: 'Thousand Oaks', state: 'CA', course_rating: 75.4, slope_rating: 144, total_par: 72,
     holes_par: [4,5,3,5,4,3,5,3,4, 4,5,3,4,5,4,4,3,4] },

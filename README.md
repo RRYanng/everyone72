@@ -16,7 +16,7 @@ Last updated October 17, 2026.
 
 **Rounds**
 - Scorecard entry for 9 or 18 holes: strokes, putts and trouble tags per hole, with an autosaved draft that is isolated per user.
-- 262 verified courses with per-hole pars; the course list lives in the database and is not client-writable.
+- 266 verified courses with per-hole pars; the course list lives in the database and is not client-writable.
 - Round history, edit and delete. Editing recomputes totals on the server; deleting also removes the practice plan that round generated and restores the previous one.
 - Stats are normalised so 9-hole and 18-hole rounds are never averaged together: averages and handicap are scaled to 18 holes (marked "≈" when estimated); best score is kept separate for 9 and 18 holes.
 
