@@ -12,6 +12,7 @@
 import { supabase } from './supabase';
 import { Round, HoleScore, Course, TroubleStats } from '../types';
 import { getLongestParStreak, getPuttingFacts, correctRoundFactCounts } from './parStreak';
+import { averagePer18, roundHoles } from './roundStats';
 
 // ── Edge Function 调用 ────────────────────────────────────────────────────────
 // 失败一律抛 AIError,由界面显示真实状态并允许重试。
@@ -212,7 +213,8 @@ function parseDiagnosisReport(raw: string): DiagnosisReport {
   };
 }
 
-function buildDiagnosisPrompt(rounds: Round[], allHoleScores: HoleScore[]): string {
+// 导出仅为单元测试(tests/diagnosisPrompt.test.cjs)
+export function buildDiagnosisPrompt(rounds: Round[], allHoleScores: HoleScore[]): string {
   // ── Per-round stats ──────────────────────────────────────────────────────────
   const roundRows = rounds.map((r, i) => {
     const holes = allHoleScores.filter(h => h.round_id === r.id);
@@ -226,13 +228,18 @@ function buildDiagnosisPrompt(rounds: Round[], allHoleScores: HoleScore[]): stri
     const rating     = (r as any).courses?.course_rating ?? '?';
     const slope      = (r as any).courses?.slope_rating ?? '?';
     const date       = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return `| ${i + 1} | ${date} | ${courseName} | ${rating}/${slope} | ${r.total_strokes} | ${r.score_vs_par > 0 ? '+' : ''}${r.score_vs_par} | ${r.total_putts} | ${threePutts} | W:${water} OB:${ob} B:${bunker} R:${rough} |`;
+    return `| ${i + 1} | ${date} | ${courseName} | ${rating}/${slope} | ${roundHoles(r)} | ${r.total_strokes} | ${r.score_vs_par > 0 ? '+' : ''}${r.score_vs_par} | ${r.total_putts} | ${threePutts} | W:${water} OB:${ob} B:${bunker} R:${rough} |`;
   });
 
   // ── Aggregated stats ─────────────────────────────────────────────────────────
   const n = rounds.length;
-  const avgScoreVsPar = +(rounds.reduce((s, r) => s + r.score_vs_par, 0) / n).toFixed(1);
-  const avgPutts      = +(rounds.reduce((s, r) => s + r.total_putts, 0) / n).toFixed(1);
+  // 9 洞和 18 洞不能直接平均:平均值一律折算成每 18 洞(和 Home / History 一致)
+  const scoreStat = averagePer18(rounds, r => r.score_vs_par);
+  const puttStat  = averagePer18(rounds, r => r.total_putts);
+  const nineHoleRounds = rounds.filter(r => roundHoles(r) !== 18).length;
+  const estimated = scoreStat.approx || puttStat.approx;
+  const avgScoreVsPar = +(scoreStat.value ?? 0).toFixed(1);
+  const avgPutts      = +(puttStat.value ?? 0).toFixed(1);
   const totalHoles    = allHoleScores.length;
   const threePuttTotal = allHoleScores.filter(h => h.putts >= 3).length;
   const threePuttRate  = totalHoles > 0 ? +((threePuttTotal / totalHoles) * 100).toFixed(1) : 0;
@@ -244,7 +251,7 @@ function buildDiagnosisPrompt(rounds: Round[], allHoleScores: HoleScore[]): stri
   const tRough  = allTroubles.filter(t => t === 'rough').length;
   const tOther  = allTroubles.filter(t => t === 'other').length;
   const tTotal  = allTroubles.length;
-  const troublePerRound = +(tTotal / n).toFixed(1);
+  const troublePer18 = totalHoles > 0 ? +((tTotal / totalHoles) * 18).toFixed(1) : 0;   // 每 18 洞,不是每轮
 
   const tPar3 = allHoleScores.filter(h => h.par === 3 && (h.troubles?.length ?? 0) > 0).length;
   const tPar4 = allHoleScores.filter(h => h.par === 4 && (h.troubles?.length ?? 0) > 0).length;
@@ -264,15 +271,16 @@ function buildDiagnosisPrompt(rounds: Round[], allHoleScores: HoleScore[]): stri
   return `You are a PGA-level golf coach and data scientist. Analyze this player's last ${n} rounds of detailed scorecard data and produce a brutally honest, data-driven diagnosis. Your goal: identify the one or two issues that are costing the most strokes per round, backed by specific numbers.
 
 ## Round-by-Round Summary
-| # | Date | Course | Rating/Slope | Score | vs Par | Putts | 3-Putts | Troubles |
-|---|------|--------|-------------|-------|--------|-------|---------|---------|
+Score, vs Par and Putts are the actual totals for the holes played in that round (see the Holes column; a 9-hole round has 9-hole totals).
+| # | Date | Course | Rating/Slope | Holes | Score | vs Par | Putts | 3-Putts | Troubles |
+|---|------|--------|-------------|-------|-------|--------|-------|---------|---------|
 ${roundRows.join('\n')}
 
-## Aggregated Statistics (all ${n} rounds)
-- Average score vs par: ${avgScoreVsPar > 0 ? '+' : ''}${avgScoreVsPar}
-- Average putts per round: ${avgPutts}
+## Aggregated Statistics (all ${n} rounds${nineHoleRounds > 0 ? `, ${nineHoleRounds} of them 9-hole` : ''})
+${estimated ? '- All per-round averages below are normalized to 18 holes (9-hole rounds are scaled x2), so they are estimates. Never treat a 9-hole total as an 18-hole score or compare raw totals across different hole counts.\n' : ''}- Average score vs par per 18 holes: ${avgScoreVsPar > 0 ? '+' : ''}${avgScoreVsPar}
+- Average putts per 18 holes: ${avgPutts}
 - 3-putt rate: ${threePuttRate}% of greens (${threePuttTotal} total 3-putts in ${totalHoles} holes)
-- Trouble incidents: ${troublePerRound}/round (${tTotal} total) — Water: ${tWater}, OB: ${tOB}, Bunker: ${tBunker}, Rough: ${tRough}, Other: ${tOther}
+- Trouble incidents: ${troublePer18} per 18 holes (${tTotal} total over ${totalHoles} holes) — Water: ${tWater}, OB: ${tOB}, Bunker: ${tBunker}, Rough: ${tRough}, Other: ${tOther}
 - Trouble by hole type: Par 3s: ${tPar3}, Par 4s: ${tPar4}, Par 5s: ${tPar5}
 - Scoring breakdown: Eagles/better: ${eagles}, Birdies: ${birdies}, Pars: ${pars}, Bogeys: ${bogeys}, Doubles+: ${doubles}
 
