@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { setMonitoringUser } from '../lib/monitoring';
 import {
   MOCK_SESSION, MOCK_USER,
   isDevMockActive, subscribeDevMock, deactivateDevMock,
@@ -44,6 +45,7 @@ export function useAuth() {
       clearTimeout(timeout);
       setSession(session);
       setUser(session?.user ?? null);
+      setMonitoringUser(session?.user?.id ?? null);
       setLoading(false);
     }).catch(() => {
       clearTimeout(timeout);
@@ -54,6 +56,7 @@ export function useAuth() {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+        setMonitoringUser(session?.user?.id ?? null);
         setLoading(false);
       }
     );
