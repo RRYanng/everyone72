@@ -21,6 +21,7 @@ const roundStats = loadSource('src/lib/roundStats.ts');
 const parStreak = loadSource('src/lib/parStreak.ts');
 const { buildDiagnosisPrompt } = loadSource('src/lib/claude.ts', {
   './supabase': { supabase: {} },          // 构建 prompt 不会用到网络
+  './analytics': { track: () => {} },
   './parStreak': parStreak,
   './roundStats': roundStats,
 });

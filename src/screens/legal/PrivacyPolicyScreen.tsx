@@ -25,7 +25,11 @@ const SECTIONS: Section[] = [
       '• Account information: email address and password (stored securely via Supabase Auth)\n' +
       '• Golf data: course selections, hole-by-hole scores, putts, and optional trouble tags\n' +
       '• Practice session data: text notes and photos you choose to share\n' +
-      '• Device information: operating system and app version for crash reporting\n\n' +
+      '• Usage events: which key actions you take (for example saving a round or whether an AI request succeeded), ' +
+      'with your account ID and platform, but never your scores, notes or any free text\n' +
+      '• Error reports: if the app crashes, a technical error report (error message, app version, ' +
+      'operating system and your anonymous account ID) is sent to our error-monitoring provider, Sentry. ' +
+      'Reports do not include your email address or IP address\n\n' +
       'We do not collect your real name, phone number, or payment information. ' +
       'Location access is used only to suggest nearby courses and is never stored on our servers.',
   },
@@ -35,7 +39,7 @@ const SECTIONS: Section[] = [
       '• To provide AI-powered round analysis via the Anthropic Claude API\n' +
       '• To display your score history and statistics\n' +
       '• To enable social features (sharing practice sessions, leaderboards) with friends you connect with\n' +
-      '• To improve app performance and fix bugs\n\n' +
+      '• To understand which features are used and to fix bugs and crashes\n\n' +
       'We do not sell, rent, or share your personal information with third parties for marketing purposes.',
   },
   {

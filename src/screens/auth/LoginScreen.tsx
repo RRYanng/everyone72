@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation';
+import { track } from '../../lib/analytics';
 import { supabase } from '../../lib/supabase';
 
 type Props = {
@@ -53,6 +54,7 @@ export default function LoginScreen({ navigation }: Props) {
         setLoading(false);
         return;
       }
+      track('login');
       // 登录成功 → onAuthStateChange 自动切换到主界面，无需手动导航
 
     } catch (err: any) {

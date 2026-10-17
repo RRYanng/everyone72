@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Ellipse, Line } from 'react-native-svg';
 
 import { supabase } from '../../lib/supabase';
+import { track } from '../../lib/analytics';
 import { useAuth } from '../../hooks/useAuth';
 import { isDevMockActive } from '../../lib/mockUser';
 import { LoadingSpinner } from '../../components';
@@ -113,6 +114,7 @@ export default function CrewListScreen() {
       setJoinError(messages[error?.message ?? ''] ?? 'Failed to join. Please check your connection and try again.');
       return;
     }
+    track('crew_joined');
     setInviteCode('');
     fetchCrews();
     navigation.navigate('CrewDetail', { crewId: crewId as string });

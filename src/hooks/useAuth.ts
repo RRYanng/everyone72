@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { setMonitoringUser } from '../lib/monitoring';
+import { trackAppOpenOnce } from '../lib/analytics';
 import {
   MOCK_SESSION, MOCK_USER,
   isDevMockActive, subscribeDevMock, deactivateDevMock,
@@ -46,6 +47,7 @@ export function useAuth() {
       setSession(session);
       setUser(session?.user ?? null);
       setMonitoringUser(session?.user?.id ?? null);
+      if (session) trackAppOpenOnce();
       setLoading(false);
     }).catch(() => {
       clearTimeout(timeout);

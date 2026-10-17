@@ -10,6 +10,7 @@
 // ============================================================
 
 import { supabase } from './supabase';
+import { track } from './analytics';
 import { Round, HoleScore, Course, TroubleStats } from '../types';
 import { getLongestParStreak, getPuttingFacts, correctRoundFactCounts } from './parStreak';
 import { averagePer18, roundHoles } from './roundStats';
@@ -58,11 +59,16 @@ async function invokeAI(kind: AIKind, prompt: string): Promise<{ text: string; t
       } catch { /* 响应体不是 JSON,保持 ai_unavailable */ }
     }
     console.warn('[Claude] Edge Function error:', code);
+    track('ai_result', { kind, ok: false, code });
     throw new AIError(code);
   }
 
   const analysis = (data as { analysis?: unknown } | null)?.analysis;
-  if (typeof analysis !== 'string' || !analysis.trim()) throw new AIError('ai_error');
+  if (typeof analysis !== 'string' || !analysis.trim()) {
+    track('ai_result', { kind, ok: false, code: 'ai_error' });
+    throw new AIError('ai_error');
+  }
+  track('ai_result', { kind, ok: true, truncated: !!(data as { truncated?: boolean }).truncated });
   return { text: analysis, truncated: !!(data as { truncated?: boolean }).truncated };
 }
 

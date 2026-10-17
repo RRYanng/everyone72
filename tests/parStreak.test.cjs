@@ -59,6 +59,7 @@ test('prompt provides partial-round facts and provider output is checked before 
   const client = loadSource('src/lib/claude.ts', {
     './parStreak': facts,
     './roundStats': loadSource('src/lib/roundStats.ts'),
+    './analytics': { track: () => {} },
     './supabase': { supabase: { functions: { invoke: async (name, args) => {
       request = { name, args };
       return { data: { analysis: '38 (+2), 19 putts, seven consecutive pars.' }, error: null };

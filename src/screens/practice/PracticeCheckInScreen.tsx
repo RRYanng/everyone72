@@ -16,6 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
+import { track } from '../../lib/analytics';
 import { useAuth } from '../../hooks/useAuth';
 import { showToast } from '../../components/Toast';
 import { updateStreak, BADGE_DEFS } from '../../lib/streak';
@@ -182,6 +183,7 @@ export default function PracticeCheckInScreen() {
         throw new Error(`Save failed: ${insertErr.message}`);
       }
 
+      track('practice_checkin', { photo: !!photo_url, tags: selectedTags.length });
       console.log('[CheckIn] Insert success, going back to feed');
       // 3. 成功 → 返回 Feed
       navigation.goBack();

@@ -18,6 +18,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { supabase } from '../../lib/supabase';
+import { track } from '../../lib/analytics';
 import { useAuth } from '../../hooks/useAuth';
 import { useScorecardDraft, ScorecardDraft } from '../../hooks/useScorecardDraft';
 import { isDevMockActive, setLastMockRound } from '../../lib/mockUser';
@@ -227,6 +228,7 @@ export default function ScorecardScreen() {
         holes:        scores,
         createdAt:    new Date().toISOString(),
       });
+      track('round_saved', { holes: scores.length });
       await clearDraft();
       isSubmitted.current = true;
       await new Promise(r => setTimeout(r, 300));
