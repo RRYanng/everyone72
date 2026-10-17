@@ -59,14 +59,17 @@ const SECTIONS: Section[] = [
     body:
       'Practice session photos you upload are stored in Supabase Storage. ' +
       'Photos are only visible to you and friends you have connected with in the app. ' +
-      'You can delete your photos at any time from the Practice feed.',
+      'You can delete your photos at any time from the Practice feed, and they are removed when you delete your account.',
   },
   {
     title: '6. Data Retention',
     body:
       'We retain your data as long as your account is active. ' +
-      'You can request account deletion by emailing ruiyiyanng@gmail.com — ' +
-      'we will delete all your data within 30 days.',
+      'You can delete your account at any time in Settings > Delete account. ' +
+      'Deletion is immediate and permanent: your profile, rounds, scores, AI analyses, practice plans, ' +
+      'check-ins, photos, friendships and Crew memberships are removed. ' +
+      'Backups may keep encrypted copies for a short period before they are overwritten. ' +
+      'You can also request deletion by emailing ruiyiyanng@gmail.com.',
   },
   {
     title: '7. Children\'s Privacy',
