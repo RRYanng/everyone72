@@ -11,6 +11,10 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import {
+  accountErrorMessage, clearLocalUserData, deleteAccountRemote,
+  DELETE_CONFIRM_WORD, isDeleteConfirmed,
+} from '../../lib/accountActions';
 import { useAuth } from '../../hooks/useAuth';
 import { isDevMockActive, MOCK_PROFILE } from '../../lib/mockUser';
 import { RootStackParamList } from '../../navigation';
@@ -45,6 +49,12 @@ export default function SettingsScreen() {
   const [saving, setSaving]         = useState(false);
   const [saveMsg, setSaveMsg]       = useState('');
   const [error, setError]           = useState('');
+
+  // 删除账号
+  const [deleteOpen, setDeleteOpen]       = useState(false);
+  const [deleteText, setDeleteText]       = useState('');
+  const [deleting, setDeleting]           = useState(false);
+  const [deleteError, setDeleteError]     = useState('');
 
   useEffect(() => {
     if (user) loadProfile();
@@ -103,6 +113,26 @@ export default function SettingsScreen() {
     } else {
       setSaveMsg('Profile saved');
       setTimeout(() => setSaveMsg(''), 3000);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!isDeleteConfirmed(deleteText) || deleting) return;
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      if (!isDevMockActive()) {
+        const uid = user!.id;
+        await deleteAccountRemote();
+        await clearLocalUserData(uid);
+        // 账号已不存在,服务端无法再作废令牌 —— 只清本地会话(auth 状态变化会把用户送回登录页)
+        await supabase.auth.signOut({ scope: 'local' });
+      } else {
+        await signOut();
+      }
+    } catch (e) {
+      setDeleteError(accountErrorMessage(e));
+      setDeleting(false);
     }
   };
 
@@ -202,6 +232,59 @@ export default function SettingsScreen() {
             accessibilityHint="Logs you out of your account"
           />
         </View>
+
+        {/* ── Delete account ──────────────────────────── */}
+        <Card style={[styles.card, styles.dangerCard]}>
+          <Text style={styles.dangerTitle} accessibilityRole="header">Delete account</Text>
+          <Text style={styles.dangerBody}>
+            Permanently deletes your account and everything in it: rounds, scores, AI analyses,
+            practice plans and check-ins (with photos), friends and Crew memberships. This cannot be undone.
+            Crews you started that have other members are handed over to the member who joined first.
+          </Text>
+
+          {!deleteOpen ? (
+            <SecondaryButton
+              label="Delete my account…"
+              onPress={() => { setDeleteOpen(true); setDeleteError(''); }}
+              accessibilityHint="Starts the account deletion confirmation"
+            />
+          ) : (
+            <>
+              <Text style={styles.fieldLabel}>Type {DELETE_CONFIRM_WORD} to confirm</Text>
+              <TextInput
+                style={styles.input}
+                value={deleteText}
+                onChangeText={t => { setDeleteText(t); setDeleteError(''); }}
+                placeholder={DELETE_CONFIRM_WORD}
+                placeholderTextColor={colors.text.hint}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!deleting}
+                accessibilityLabel={`Type ${DELETE_CONFIRM_WORD} to confirm account deletion`}
+              />
+              {deleteError ? (
+                <View style={styles.errorBox} accessibilityLiveRegion="polite">
+                  <Text style={styles.errorText}>⚠ {deleteError}</Text>
+                </View>
+              ) : null}
+              <View style={styles.dangerButtons}>
+                <SecondaryButton
+                  label="Cancel"
+                  onPress={() => { setDeleteOpen(false); setDeleteText(''); setDeleteError(''); }}
+                  disabled={deleting}
+                />
+                <PrimaryButton
+                  label="Delete forever"
+                  onPress={handleDeleteAccount}
+                  loading={deleting}
+                  disabled={!isDeleteConfirmed(deleteText)}
+                  style={styles.dangerButton}
+                  accessibilityHint="Permanently deletes your account"
+                />
+              </View>
+            </>
+          )}
+        </Card>
 
         {/* ── Premium ─────────────────────────────────── */}
         <View style={styles.premiumHeaderRow}>
@@ -393,6 +476,28 @@ const styles = StyleSheet.create({
   signOutWrap: {
     marginTop: spacing.md,
   },
+
+  // Delete account
+  dangerCard: {
+    marginTop: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.aka,
+  },
+  dangerTitle: {
+    fontSize: typography.base,
+    fontWeight: '700',
+    color: colors.aka,
+  },
+  dangerBody: {
+    fontSize: typography.sm,
+    color: colors.text.secondary,
+    lineHeight: typography.sm * 1.5,
+  },
+  dangerButtons: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  dangerButton: { backgroundColor: colors.aka },
 
   // Premium
   premiumHeaderRow: {

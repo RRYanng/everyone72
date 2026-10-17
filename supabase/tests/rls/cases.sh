@@ -190,3 +190,50 @@ expect "匿名/PUBLIC 不能执行,登录用户可以" A \
   "select has_function_privilege('anon','public.crew_member_handicaps(uuid)','execute') || '|' || has_function_privilege('authenticated','public.crew_member_handicaps(uuid)','execute');" "false|true"
 expect "仍然读不到别人的成绩本身(rounds 的 RLS 没被放开)" A \
   "$SU $JOIN_B $HCP_B3 $BACK select count(*) from rounds where user_id='$B';" "0"
+
+echo "── prepare_account_deletion / 账号级联删除 ──"
+# 这组用例不能用 $SU(session_replication_role=replica 会关掉外键级联触发器),只用 reset role。
+SVC="reset role;"
+CH=66666666-0000-0000-0000-000000000001
+# B 先加入(joined_at 更早),C 后加入
+CREW_AB="insert into crew_members(crew_id,user_id,joined_at) values ('$CREW','$B', now()-interval '2 days'), ('$CREW','$C', now()-interval '1 day');"
+expect "有其他成员的 Crew:所有权转给加入最早的成员(B)" A \
+  "$SVC $CREW_AB create temp table _r as select prepare_account_deletion('$A')->>'crews_transferred' as n; select (select n from _r) || '|' || (select creator_id = '$B' from crews where id='$CREW');" "1|true"
+expect "新所有者在 crew_members 里的角色变成 owner" A \
+  "$SVC $CREW_AB select prepare_account_deletion('$A') is not null; select role from crew_members where crew_id='$CREW' and user_id='$B';" "owner"
+expect "转让后删掉 A 的账号,Crew 和其他成员还在" A \
+  "$SVC $CREW_AB select prepare_account_deletion('$A') is not null; delete from auth.users where id='$A'; select (select count(*) from crews where id='$CREW') || '/' || (select count(*) from crew_members where crew_id='$CREW');" "1/2"
+expect "对照:不做 prepare 直接删账号,整个 Crew 连同 B、C 一起消失(这就是需要它的原因)" A \
+  "$SVC $CREW_AB delete from auth.users where id='$A'; select (select count(*) from crews where id='$CREW') || '/' || (select count(*) from crew_members where crew_id='$CREW');" "0/0"
+expect "A 发起的挑战跟着 Crew 留下,改挂到新所有者" A \
+  "$SVC $CREW_AB insert into crew_challenges(id,crew_id,created_by,title) values ('$CH','$CREW','$A','Break 80'); select prepare_account_deletion('$A') is not null; delete from auth.users where id='$A'; select created_by = '$B' from crew_challenges where id='$CH';" "t"
+expect "成员(非所有者)删号:他在别人 Crew 里发起的挑战改挂给所有者,不会消失" B \
+  "$SVC insert into crew_members(crew_id,user_id) values ('$CREW','$B'); insert into crew_challenges(id,crew_id,created_by,title) values ('$CH','$CREW','$B','Putt-off'); select prepare_account_deletion('$B') is not null; delete from auth.users where id='$B'; select created_by = '$A' from crew_challenges where id='$CH';" "t"
+expect "只有自己一个人的 Crew:不转让,随账号一起删除" A \
+  "$SVC select prepare_account_deletion('$A')->>'crews_deleted_with_account'; delete from auth.users where id='$A'; select count(*) from crews where id='$CREW';" "0"
+expect "幂等:第二次调用不再转让、不报错" A \
+  "$SVC $CREW_AB select prepare_account_deletion('$A') is not null; select prepare_account_deletion('$A')->>'crews_transferred';" "0"
+
+expect "候补名单:按 user_id 和同一邮箱(不分大小写)都删,别人的保留" A \
+  "$SVC insert into coach_waitlist(email,user_id) values ('a@test.local','$A'), ('A@Test.Local',null), ('c@test.local','$C'); select prepare_account_deletion('$A')->>'waitlist_rows_deleted'; select string_agg(email, ',') from coach_waitlist;" "c@test.local"
+expect "候补名单删除条数正确(2)" A \
+  "$SVC insert into coach_waitlist(email,user_id) values ('a@test.local','$A'), ('A@Test.Local',null), ('c@test.local','$C'); select prepare_account_deletion('$A')->>'waitlist_rows_deleted';" "2"
+
+expect "整号级联:B 删号后他的成绩/逐洞/练习/计划/好友关系/Crew 成员行全部消失" B \
+  "$SVC insert into crew_members(crew_id,user_id) values ('$CREW','$B');
+   insert into rounds(id,user_id,course_id,total_strokes,total_putts,score_vs_par) values ('77777777-0000-0000-0000-000000000001','$B','c1',80,34,8);
+   insert into hole_scores(round_id,hole_number,par,strokes,putts) values ('77777777-0000-0000-0000-000000000001',1,4,5,2);
+   insert into practice_logs(user_id,note) values ('$B','b practice');
+   insert into practice_plans(user_id,round_id,plan_text,is_active) values ('$B','77777777-0000-0000-0000-000000000001','plan',true);
+   insert into friendships(user_id,friend_id,status) values ('$B','$C','pending');
+   select prepare_account_deletion('$B') is not null; delete from auth.users where id='$B';
+   select (select count(*) from rounds where user_id='$B') || '/' || (select count(*) from hole_scores where round_id='77777777-0000-0000-0000-000000000001') || '/' || (select count(*) from practice_logs where user_id='$B') || '/' || (select count(*) from practice_plans where user_id='$B') || '/' || (select count(*) from friendships where user_id='$B' or friend_id='$B') || '/' || (select count(*) from crew_members where user_id='$B') || '/' || (select count(*) from profiles where id='$B');" "0/0/0/0/0/0/0"
+expect "整号级联:B 删号不影响 A 的数据" B \
+  "$SVC select prepare_account_deletion('$B') is not null; delete from auth.users where id='$B'; select (select count(*) from rounds where user_id='$A') || '/' || (select count(*) from profiles where id='$A');" "2/1"
+expect "B 删号后,B 在 A 的好友圈里不再有反应(reactions)" B \
+  "$SVC select prepare_account_deletion('$B') is not null; delete from auth.users where id='$B'; select count(*) from reactions where user_id='$B';" "0"
+
+expect "user_required:传 null 报错" A "$SVC select prepare_account_deletion(null);" "user_required"
+expect "不存在的用户:不报错,什么都不做" A "$SVC select prepare_account_deletion('99999999-0000-0000-0000-000000000009')::text;" '"crews_transferred": 0'
+expect "只有 service_role 能执行(anon / authenticated 都不行)" A \
+  "select has_function_privilege('anon','public.prepare_account_deletion(uuid)','execute') || '|' || has_function_privilege('authenticated','public.prepare_account_deletion(uuid)','execute') || '|' || has_function_privilege('service_role','public.prepare_account_deletion(uuid)','execute');" "false|false|true"
