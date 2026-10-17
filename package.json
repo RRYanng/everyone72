@@ -11,7 +11,10 @@
     "vercel-build": "expo export --platform web",
     "typecheck:web": "tsc --noEmit",
     "typecheck:edge": "deno check --config deno.edge.json supabase/functions/analyze-round/index.ts",
-    "typecheck": "npm run typecheck:web && npm run typecheck:edge"
+    "typecheck": "npm run typecheck:web && npm run typecheck:edge",
+    "test": "node --test tests/*.test.cjs",
+    "test:edge": "for f in analyze-round delete-account; do docker run --rm -v \"$PWD/supabase/functions/$f\":/app -w /app denoland/deno:alpine deno test handler_test.ts || exit 1; done",
+    "test:sql": "bash supabase/tests/rls/run.sh"
   },
   "dependencies": {
     "@expo-google-fonts/cormorant": "^0.4.2",
