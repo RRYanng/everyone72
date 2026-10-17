@@ -10,6 +10,7 @@
 // ============================================================
 
 import { supabase } from './supabase';
+import { track } from './analytics';
 import { getProfileExtras } from './profileExtras';
 import { Outing, OutingMember, JoinMode } from '../types/buddies';
 
@@ -44,6 +45,7 @@ export async function createOuting(organizerId: string, input: NewOutingInput): 
   await supabase.from('outing_members').insert({
     outing_id: data.id, user_id: organizerId, status: 'joined',
   });
+  track('outing_created');
   return data as Outing;
 }
 
@@ -80,6 +82,7 @@ export async function joinOuting(outingId: string, userId: string, joinMode: Joi
     outing_id: outingId, user_id: userId,
     status: joinMode === 'approve' ? 'pending' : 'joined',
   });
+  if (!error) track('outing_joined', { mode: joinMode });
   return !error;
 }
 

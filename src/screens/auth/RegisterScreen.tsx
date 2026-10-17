@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation';
+import { track } from '../../lib/analytics';
 import { supabase } from '../../lib/supabase';
 import { LoadingSpinner } from '../../components';
 import { colors, radius, spacing, typography, fontFamily } from '../../theme';
@@ -76,6 +77,7 @@ export default function RegisterScreen({ navigation }: Props) {
             email: email.trim().toLowerCase(),
           });
         if (profileError) console.error('[Register] profile insert error:', profileError);
+        track('sign_up');
       } else if (data.user && !data.session) {
         setLoading(false);
         setSuccess(true);

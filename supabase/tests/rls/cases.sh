@@ -304,3 +304,26 @@ expect "user_required:传 null 报错" A "$SVC select prepare_account_deletion(n
 expect "不存在的用户:不报错,什么都不做" A "$SVC select prepare_account_deletion('99999999-0000-0000-0000-000000000009')::text;" '"crews_transferred": 0'
 expect "只有 service_role 能执行(anon / authenticated 都不行)" A \
   "select has_function_privilege('anon','public.prepare_account_deletion(uuid)','execute') || '|' || has_function_privilege('authenticated','public.prepare_account_deletion(uuid)','execute') || '|' || has_function_privilege('service_role','public.prepare_account_deletion(uuid)','execute');" "false|false|true"
+
+echo "── app_events / track_event ──"
+expect "登录用户可以记录白名单事件" A "select track_event('round_saved','{\"holes\":18}'::jsonb,'web');" "t"
+expect "事件真的写入,props 和 platform 保存正确" A \
+  "select track_event('ai_result','{\"kind\":\"analysis\",\"ok\":false,\"code\":\"quota_exceeded\"}'::jsonb,'ios'); reset role; select name || '|' || (props->>'code') || '|' || platform from app_events;" "ai_result|quota_exceeded|ios"
+expect "不在白名单的事件名被拒绝(返回 false,不写表)" A "select track_event('drop_table');" "f"
+expect "被拒绝的事件没有写入" A "select track_event('drop_table'); select track_event(null); reset role; select count(*) from app_events;" "0"
+expect "props 不是对象(数组/字符串)被拒绝" A "select track_event('login','[1,2]'::jsonb) || '|' || track_event('login','\"x\"'::jsonb);" "false|false"
+expect "props 过大(>1000 字符)被拒绝" A "select track_event('login', jsonb_build_object('k', repeat('x',1200)));" "f"
+expect "props 为 null 按空对象处理" A "select track_event('login', null);" "t"
+expect "非法 platform 被置空而不是报错" A "select track_event('login','{}'::jsonb,'toaster'); reset role; select coalesce(platform,'NULL') from app_events;" "NULL"
+expect "匿名用户不能记录(没有 EXECUTE 权限)" A \
+  "select has_function_privilege('anon','public.track_event(text,jsonb,text)','execute') || '|' || has_function_privilege('authenticated','public.track_event(text,jsonb,text)','execute');" "false|true"
+expect "客户端不能直接读表(权限被收回)" A "select count(*) from app_events;" "permission denied"
+expect "客户端不能直接写表" A "insert into app_events(user_id,name) values (auth.uid(),'login');" "permission denied"
+expect "每用户 24 小时 300 条上限:超出返回 false" A \
+  "reset role; insert into app_events(user_id,name) select '$A','login' from generate_series(1,300); set local role authenticated; select track_event('login');" "f"
+expect "上限只统计 24 小时内的事件:更早的不算" A \
+  "reset role; insert into app_events(user_id,name,created_at) select '$A','login', now()-interval '2 days' from generate_series(1,300); set local role authenticated; select track_event('login');" "t"
+expect "上限按用户隔离:A 满额不影响 B" B \
+  "reset role; insert into app_events(user_id,name) select '$A','login' from generate_series(1,300); set local role authenticated; select track_event('login');" "t"
+expect "账号删除时该用户的事件随之删除" A \
+  "reset role; insert into app_events(user_id,name) values ('$A','login'),('$B','login'); delete from auth.users where id='$A'; select count(*) || '|' || (select count(*) from app_events where user_id='$B') from app_events where user_id='$A';" "0|1"

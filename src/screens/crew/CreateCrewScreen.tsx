@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { track } from '../../lib/analytics';
 import { useAuth } from '../../hooks/useAuth';
 import { isDevMockActive } from '../../lib/mockUser';
 import { PrimaryButton, ScreenHeader } from '../../components';
@@ -83,6 +84,7 @@ export default function CreateCrewScreen() {
       return;
     }
 
+    track('crew_created');
     setLoading(false);
     navigation.replace('CrewDetail', { crewId: crew.id });
   };
