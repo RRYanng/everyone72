@@ -78,3 +78,8 @@ test('best scores: a missing kind shows a dash, odd hole counts are ignored', ()
   assert.deepEqual(bestScores([r(12, 50, 20, 2)]), { best18: null, best9: null });
   assert.deepEqual(bestScores([]), { best18: null, best9: null });
 });
+
+test('handicap rounding matches the SQL function on a negative .5 tie (-0.25 -> -0.2, not -0.3)', () => {
+  const rounds = [-1, 0, 0, 0, 5, 5, 5].map(v => r(18, 72 + v, 30, v));
+  assert.equal(handicap18(rounds), -0.2);
+});

@@ -159,3 +159,34 @@ expect "只加了这一张业务表(不会把 profiles 等意外加进去)" A \
   "reset role; select string_agg(tablename, ',' order by tablename) from pg_publication_tables where pubname='supabase_realtime' and schemaname='public';" "outing_comments"
 expect "发布里恰好一行 outing_comments(没有重复加入)" A \
   "reset role; select count(*) from pg_publication_tables where pubname='supabase_realtime' and tablename='outing_comments';" "1"
+
+echo "── crew_member_handicaps ──"
+# 夹具与 tests/roundStats.test.cjs 对齐:[18 洞 +6, 9 洞 +2, 18 洞 +5] → 4.5;vs-par 0..19 的 20 轮 → 3.5
+HCP_B3="insert into rounds(user_id,course_id,total_holes,total_strokes,total_putts,score_vs_par,created_at) values
+  ('$B','c1',18,78,30,6, now()-interval '3 days'), ('$B','c1',9,38,15,2, now()-interval '2 days'), ('$B','c1',18,77,30,5, now()-interval '1 day');"
+JOIN_B="insert into crew_members(crew_id,user_id) values ('$CREW','$B');"
+expect "成员能看到同 Crew 成员的 HCP,9 洞按 18 洞折算(+2→+4,结果 4.5)" A \
+  "$SU $JOIN_B $HCP_B3 $BACK select handicap from crew_member_handicaps('$CREW') where user_id='$B';" "4.5"
+expect "不折算会得到 3.5:确认返回的不是原始 vs-par 平均" A \
+  "$SU $JOIN_B $HCP_B3 $BACK select handicap <> 3.5 from crew_member_handicaps('$CREW') where user_id='$B';" "t"
+expect "别人成绩不足 3 轮时对其他成员隐藏(A 只有 2 轮)" B \
+  "$SU $JOIN_B $HCP_B3 $BACK select count(*) from crew_member_handicaps('$CREW') where user_id='$A';" "0"
+expect "自己的 HCP 即使不足 3 轮也看得到(A 的两轮 +18/+13 → 最好一半 = 13)" A \
+  "$SU $JOIN_B $HCP_B3 $BACK select handicap from crew_member_handicaps('$CREW') where user_id='$A';" "13"
+expect "非成员拿不到任何结果(也不报错)" C \
+  "$SU $JOIN_B $HCP_B3 $BACK select count(*) from crew_member_handicaps('$CREW');" "0"
+expect "只返回当前成员:没加入的 B 不在结果里" A \
+  "$SU $HCP_B3 $BACK select count(*) from crew_member_handicaps('$CREW') where user_id='$B';" "0"
+expect "只看最近 20 轮:更早的 5 轮 -10 不参与,vs-par 0..19 → 3.5" A \
+  "$SU $JOIN_B insert into rounds(user_id,course_id,total_holes,total_strokes,total_putts,score_vs_par,created_at) select '$B','c1',18,72+g,30,g, now()-(g||' hours')::interval from generate_series(0,19) g;
+   insert into rounds(user_id,course_id,total_holes,total_strokes,total_putts,score_vs_par,created_at) select '$B','c1',18,62,30,-10, now()-interval '100 days' - (g||' days')::interval from generate_series(1,5) g;
+   $BACK select handicap from crew_member_handicaps('$CREW') where user_id='$B';" "3.5"
+expect "四舍五入与 JS 一致:7 轮 [-1,0,0,0,5,5,5] → 最好 4 轮平均 -0.25 → -0.2(不是 -0.3)" A \
+  "$SU $JOIN_B insert into rounds(user_id,course_id,total_holes,total_strokes,total_putts,score_vs_par,created_at) select '$B','c1',18,72+v,30,v, now()-(i||' days')::interval from unnest(array[-1,0,0,0,5,5,5]) with ordinality as t(v,i);
+   $BACK select handicap from crew_member_handicaps('$CREW') where user_id='$B';" "-0.2"
+expect "返回的列只有 user_id 和 handicap(看不到任何一轮的成绩)" A \
+  "select pg_get_function_result('public.crew_member_handicaps(uuid)'::regprocedure);" "TABLE(user_id uuid, handicap numeric)"
+expect "匿名/PUBLIC 不能执行,登录用户可以" A \
+  "select has_function_privilege('anon','public.crew_member_handicaps(uuid)','execute') || '|' || has_function_privilege('authenticated','public.crew_member_handicaps(uuid)','execute');" "false|true"
+expect "仍然读不到别人的成绩本身(rounds 的 RLS 没被放开)" A \
+  "$SU $JOIN_B $HCP_B3 $BACK select count(*) from rounds where user_id='$B';" "0"
