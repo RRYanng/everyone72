@@ -15,6 +15,7 @@ import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 
 import { supabase } from '../../lib/supabase';
 import { notify, confirmAction } from '../../lib/dialog';
+import { track } from '../../lib/analytics';
 import { deleteRound, roundActionMessage } from '../../lib/roundActions';
 import { analyzeRound, generatePracticePlan, aiErrorMessage } from '../../lib/claude';
 import { isOfflineContent } from '../../lib/analysisSource';
@@ -266,6 +267,7 @@ export default function AnalysisScreen() {
     setDeleting(true);
     try {
       await deleteRound(roundId);
+      track('round_deleted');
       navigation.popToTop();   // 首页获得焦点时会重新拉取成绩,统计随之更新
     } catch (err) {
       setDeleting(false);

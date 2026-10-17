@@ -19,6 +19,7 @@ import { colors, radius, spacing, typography } from '../../theme';
 import { HoleEdit, roundTotals, hasRoundChanged } from '../../lib/roundStats';
 import { updateRound, roundActionMessage } from '../../lib/roundActions';
 import { confirmAction } from '../../lib/dialog';
+import { track } from '../../lib/analytics';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteT  = RouteProp<RootStackParamList, 'EditRound'>;
@@ -111,6 +112,7 @@ export default function EditRoundScreen() {
     setSaveError('');
     try {
       await updateRound(roundId, teeBox, holes);
+      track('round_edited');
       // 回到首页栈顶再进分析页:不留下一个显示旧成绩的分析页。
       // 旧的 AI 分析已被服务端清空,分析页会重新生成(并更新练习计划)。
       navigation.popToTop();
