@@ -16,16 +16,9 @@ import {
   generateTroubleInsights, generateDiagnosisReport, DiagnosisReport, aiErrorMessage,
 } from '../../lib/claude';
 
-const MIN_ROUNDS_FOR_DIAGNOSIS = 5;
+import { averagePer18, bestScores, handicap18 } from '../../lib/roundStats';
 
-function calcHandicap(rounds: Round[]): number | null {
-  if (rounds.length === 0) return null;
-  const diffs = [...rounds].map(r => r.score_vs_par).sort((a, b) => a - b);
-  const take  = Math.min(Math.ceil(diffs.length / 2), 8);
-  const best  = diffs.slice(0, take);
-  const avg   = best.reduce((s, d) => s + d, 0) / best.length;
-  return Math.round(avg * 10) / 10;
-}
+const MIN_ROUNDS_FOR_DIAGNOSIS = 5;
 
 export function useHistoryData() {
   const { user } = useAuth();
@@ -182,10 +175,12 @@ export function useHistoryData() {
   );
 
   // ── Derived values ─────────────────────────────────────────
-  const avgScore  = rounds.length > 0
-    ? (rounds.reduce((s, r) => s + r.total_strokes, 0) / rounds.length).toFixed(1) : null;
-  const bestScore = rounds.length > 0 ? Math.min(...rounds.map(r => r.total_strokes)) : null;
-  const handicap  = calcHandicap(rounds.slice(0, 20));
+  // 9 洞按 18 洞折算后再平均(有折算则加 ≈);最好成绩 18 洞 / 9 洞分开,不折算
+  const avgStat   = averagePer18(rounds, r => r.total_strokes);
+  const avgScore  = avgStat.value === null ? null
+    : `${avgStat.approx ? '≈' : ''}${avgStat.value.toFixed(1)}`;
+  const best      = bestScores(rounds);
+  const handicap  = handicap18(rounds.slice(0, 20));
   const showTabs  = rounds.length >= MIN_ROUNDS_FOR_DIAGNOSIS;
 
   return {
@@ -196,7 +191,7 @@ export function useHistoryData() {
     // actions
     fetchRounds, fetchDiagnosis, resetDiagnosis,
     // derived
-    avgScore, bestScore, handicap, showTabs,
+    avgScore, best, handicap, showTabs,
     MIN_ROUNDS_FOR_DIAGNOSIS,
   };
 }

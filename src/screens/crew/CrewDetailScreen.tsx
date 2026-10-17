@@ -8,6 +8,7 @@ import {
   SafeAreaView, ActivityIndicator, TextInput,
 } from 'react-native';
 import { confirmAction, notify } from '../../lib/dialog';
+import { handicap18 } from '../../lib/roundStats';
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,14 +24,6 @@ type RouteT   = RouteProp<RootStackParamList, 'CrewDetail'>;
 type Tab = 'members' | 'leaderboard' | 'challenges';
 
 // ── helpers ───────────────────────────────────────────────────
-function calcHandicap(rounds: { score_vs_par: number }[]): number | null {
-  if (rounds.length === 0) return null;
-  const diffs = [...rounds].map(r => r.score_vs_par).sort((a, b) => a - b);
-  const take  = Math.min(Math.ceil(diffs.length / 2), 8);
-  const best  = diffs.slice(0, take);
-  return Math.round((best.reduce((s, d) => s + d, 0) / best.length) * 10) / 10;
-}
-
 function daysLeft(deadline: string | null): string {
   if (!deadline) return '';
   const diff = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000);
@@ -107,7 +100,7 @@ export default function CrewDetailScreen() {
     // 4. Get recent rounds for handicap computation (last 20 per member)
     const { data: roundRows } = await supabase
       .from('rounds')
-      .select('user_id, score_vs_par')
+      .select('user_id, score_vs_par, total_holes')
       .in('user_id', userIds)
       .order('created_at', { ascending: false })
       .limit(200);
@@ -121,7 +114,7 @@ export default function CrewDetailScreen() {
       statsMap[s.user_id] = { streak: s.current_streak, practices: s.total_practices };
     });
 
-    const roundsMap: Record<string, { score_vs_par: number }[]> = {};
+    const roundsMap: Record<string, { score_vs_par: number; total_holes: number | null }[]> = {};
     (roundRows ?? []).forEach(r => {
       if (!roundsMap[r.user_id]) roundsMap[r.user_id] = [];
       if (roundsMap[r.user_id].length < 20) roundsMap[r.user_id].push(r);
@@ -132,7 +125,7 @@ export default function CrewDetailScreen() {
       username:         profileMap[m.user_id] ?? 'Unknown',
       current_streak:   statsMap[m.user_id]?.streak    ?? 0,
       total_practices:  statsMap[m.user_id]?.practices ?? 0,
-      recent_handicap:  calcHandicap(roundsMap[m.user_id] ?? []),
+      recent_handicap:  handicap18(roundsMap[m.user_id] ?? []),
     }));
 
     setMembers(enriched);

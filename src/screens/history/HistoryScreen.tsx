@@ -38,7 +38,7 @@ export default function HistoryScreen() {
     troubleStats, troubleInsight, loadingInsight,
     diagnosisReport, loadingDiagnosis, diagnosisError,
     fetchRounds, fetchDiagnosis, resetDiagnosis,
-    avgScore, bestScore, handicap, showTabs,
+    avgScore, best, handicap, showTabs,
   } = data;
 
   const [activeTab, setActiveTab] = useState<TabType>('rounds');
@@ -85,7 +85,7 @@ export default function HistoryScreen() {
         <HistoryStatsBar
           roundsCount={rounds.length}
           avgScore={avgScore}
-          bestScore={bestScore}
+          best={best}
           handicap={handicap}
         />
       )}

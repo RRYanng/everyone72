@@ -2,15 +2,16 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Card } from '../../components';
 import { colors, spacing, typography } from '../../theme';
+import { BestScores, formatBestScores } from '../../lib/roundStats';
 
 interface Props {
   roundsCount: number;
   avgScore: string | null;
-  bestScore: number | null;
+  best: BestScores;
   handicap: number | null;
 }
 
-export function HistoryStatsBar({ roundsCount, avgScore, bestScore, handicap }: Props) {
+export function HistoryStatsBar({ roundsCount, avgScore, best, handicap }: Props) {
   const handicapStr =
     handicap !== null ? (handicap >= 0 ? `+${handicap}` : `${handicap}`) : '—';
 
@@ -20,7 +21,7 @@ export function HistoryStatsBar({ roundsCount, avgScore, bestScore, handicap }: 
         style={styles.card}
         accessibilityLabel={
           `${roundsCount} rounds, average ${avgScore ?? 'unavailable'}, ` +
-          `best ${bestScore ?? 'unavailable'}, handicap ${handicapStr}`
+          `${formatBestScores(best)}, handicap ${handicapStr}`
         }
       >
         <View style={styles.row}>
@@ -28,9 +29,10 @@ export function HistoryStatsBar({ roundsCount, avgScore, bestScore, handicap }: 
           <Divider />
           <Stat label="Avg Score" value={avgScore ?? '—'} />
           <Divider />
-          <Stat label="Best Score" value={bestScore ?? '—'} />
-          <Divider />
           <Stat label="Handicap" value={handicapStr} />
+        </View>
+        <View style={styles.bestRow}>
+          <Text style={styles.bestText}>{formatBestScores(best)}</Text>
         </View>
       </Card>
     </View>
@@ -70,6 +72,19 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.xs,
     letterSpacing: 0.4,
+  },
+  bestRow: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.usuzumi,
+    alignItems: 'center',
+  },
+  bestText: {
+    fontSize: typography.sm,
+    fontWeight: '600',
+    color: colors.text.primary,
+    fontVariant: ['tabular-nums'],
   },
   divider: {
     width: StyleSheet.hairlineWidth,

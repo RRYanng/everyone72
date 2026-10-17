@@ -4,6 +4,7 @@ import { LineChart } from 'react-native-chart-kit';
 import { Round } from '../../types';
 import { Card } from '../../components';
 import { colors, spacing, typography } from '../../theme';
+import { per18, roundHoles } from '../../lib/roundStats';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -20,6 +21,7 @@ interface Props {
 
 export function ScoreTrendCard({ rounds, totalRoundsCount }: Props) {
   if (rounds.length < 2) return null;
+  const hasNineHole = rounds.some(r => roundHoles(r) !== 18);
 
   const chartData = {
     labels: rounds.map((_, i) =>
@@ -27,7 +29,8 @@ export function ScoreTrendCard({ rounds, totalRoundsCount }: Props) {
         ? `R${totalRoundsCount - rounds.length + i + 1}` : ''
     ),
     datasets: [{
-      data: rounds.map(r => r.total_strokes),
+      // 9 洞按 18 洞折算后画图,否则 9 洞成绩会在折线上画出一个假的深谷
+      data: rounds.map(r => Math.round(per18(r.total_strokes, roundHoles(r)))),
       color: (opacity = 1) => `rgba(${KIN}, ${opacity})`,
       strokeWidth: 2,
     }],
@@ -63,6 +66,7 @@ export function ScoreTrendCard({ rounds, totalRoundsCount }: Props) {
       />
       <Text style={styles.hint}>
         Last {rounds.length} rounds (oldest → newest)
+        {hasNineHole ? ' · 9-hole rounds shown as 18-hole equivalent' : ''}
       </Text>
     </Card>
   );

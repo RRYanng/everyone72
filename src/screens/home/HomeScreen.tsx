@@ -28,6 +28,7 @@ import {
 import { RootStackParamList } from '../../navigation';
 import { colors, radius, spacing, typography, fontFamily } from '../../theme';
 import { findAnyDraft, ScorecardDraft } from '../../hooks/useScorecardDraft';
+import { averagePer18, handicap18 } from '../../lib/roundStats';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -67,6 +68,7 @@ export default function HomeScreen() {
   const navigation = useNavigation<NavProp>();
   const { user } = useAuth();
   const [recentRounds, setRecentRounds] = useState<Round[]>([]);
+  const [totalRounds, setTotalRounds] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [username, setUsername] = useState('');
@@ -101,6 +103,7 @@ export default function HomeScreen() {
   const fetchRecentRounds = async () => {
     if (isDevMockActive()) {
       setRecentRounds(MOCK_ROUNDS);
+      setTotalRounds(MOCK_ROUNDS.length);
       setLoading(false);
       return;
     }
@@ -114,6 +117,13 @@ export default function HomeScreen() {
         .limit(20);
       if (error) throw error;
       if (data) setRecentRounds(data as Round[]);
+
+      // "Rounds" 要显示真实总数;上面的列表只取最近 20 条,不能拿它的长度当总数
+      const { count, error: countErr } = await supabase
+        .from('rounds')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id);
+      if (!countErr && count !== null) setTotalRounds(count);
     } catch (err: any) {
       const msg = err?.message ?? '';
       if (msg.includes('fetch') || msg.includes('Failed') || msg.includes('network')) {
@@ -152,28 +162,20 @@ export default function HomeScreen() {
     if (stats) setUserStats(stats);
   };
 
+  // 平均杆数 / 推杆取最近 3 轮,9 洞按 18 洞折算后再平均(有折算就标 ≈)
   const displayRounds = recentRounds.slice(0, 3);
-  const avgScore = displayRounds.length > 0
-    ? Math.round(displayRounds.reduce((s, r) => s + r.total_strokes, 0) / displayRounds.length)
-    : null;
+  const avgScoreStat = averagePer18(displayRounds, r => r.total_strokes);
+  const avgPuttsStat = averagePer18(displayRounds, r => r.total_putts);
+  const avgScore = avgScoreStat.value === null ? null : Math.round(avgScoreStat.value);
+  const avgPutts = avgPuttsStat.value === null ? null : Math.round(avgPuttsStat.value);
 
-  const animRounds   = useCountUp(!loading ? recentRounds.length : null, 600);
+  const animRounds   = useCountUp(!loading ? (totalRounds ?? recentRounds.length) : null, 600);
   const animAvgScore = useCountUp(!loading && avgScore !== null ? avgScore : null, 700);
-  const animAvgPutts = useCountUp(
-    !loading && displayRounds.length > 0
-      ? Math.round(displayRounds.reduce((s, r) => s + r.total_putts, 0) / displayRounds.length)
-      : null,
-    650,
-  );
+  const animAvgPutts = useCountUp(!loading && avgPutts !== null ? avgPutts : null, 650);
+  const approx = (stat: { approx: boolean }, v: number | string | null) =>
+    v === null ? '—' : stat.approx ? `≈${v}` : v;
 
-  const handicap = (() => {
-    if (recentRounds.length === 0) return null;
-    const diffs = [...recentRounds].map(r => r.score_vs_par).sort((a, b) => a - b);
-    const take = Math.min(Math.ceil(diffs.length / 2), 8);
-    const best = diffs.slice(0, take);
-    const avg = best.reduce((s, d) => s + d, 0) / best.length;
-    return Math.round(avg * 10) / 10;
-  })();
+  const handicap = handicap18(recentRounds);
 
   const handicapStr =
     handicap === null ? '—'
@@ -223,15 +225,15 @@ export default function HomeScreen() {
         <View
           style={styles.statsCard}
           accessibilityLabel={
-            `${animRounds ?? '—'} rounds, average ${animAvgScore ?? '—'}, ` +
-            `average putts ${animAvgPutts ?? '—'}, handicap ${handicapStr}`
+            `${animRounds ?? '—'} rounds, average ${approx(avgScoreStat, animAvgScore)}, ` +
+            `average putts ${approx(avgPuttsStat, animAvgPutts)}, handicap ${handicapStr}`
           }
         >
           <StatCol label="Rounds"    value={animRounds   ?? '—'} icon="flag-outline" />
           <StatVDivider />
-          <StatCol label="Avg Score" value={animAvgScore ?? '—'} icon="bar-chart-outline" />
+          <StatCol label="Avg Score" value={approx(avgScoreStat, animAvgScore)} icon="bar-chart-outline" />
           <StatVDivider />
-          <StatCol label="Avg Putts" value={animAvgPutts ?? '—'} icon="golf-outline" />
+          <StatCol label="Avg Putts" value={approx(avgPuttsStat, animAvgPutts)} icon="golf-outline" />
           <StatVDivider />
           <StatCol label="Handicap"  value={handicapStr}        icon="person-outline" />
         </View>
