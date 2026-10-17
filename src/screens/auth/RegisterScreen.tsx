@@ -97,7 +97,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
   return (
     <AuthShell
-      title="Begin gently"
+      title="Start your journey"
       subtitle="A quiet place to keep every round, and to see how your game is growing."
       footer={
         <AuthLink

@@ -63,6 +63,21 @@ export const typography = {
 } as const;
 
 export const fontFamily = {
+  /** Cormorant 轻字重 — 大标题(≥ 24px 才用,Japandi 指南:小字号不用 Light) */
+  displayLight: Platform.select({
+    web: "Cormorant_300Light, Georgia, serif",
+    default: 'Cormorant_300Light',
+  }) as string,
+  /** Cormorant 常规 — 品牌字标、引语 */
+  display: Platform.select({
+    web: "Cormorant_400Regular, Georgia, serif",
+    default: 'Cormorant_400Regular',
+  }) as string,
+  /** Cormorant 斜体 */
+  displayItalic: Platform.select({
+    web: "Cormorant_400Regular_Italic, Georgia, serif",
+    default: 'Cormorant_400Regular_Italic',
+  }) as string,
   /** Editorial serif — hero titles, big quotes */
   serif: Platform.select({
     ios: 'Georgia',

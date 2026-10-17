@@ -226,8 +226,8 @@ const styles = StyleSheet.create({
   artPanelHead: { gap: spacing.md, zIndex: 1 },
   artPanelArt: { position: 'absolute', left: 0, right: 0, bottom: 0, top: '22%' },
   artQuote: {
-    fontFamily: fontFamily.serif, fontSize: typography.lg, color: colors.inkSoft,
-    letterSpacing: 0.3, lineHeight: typography.lg * 1.5, maxWidth: 280,
+    fontFamily: fontFamily.displayItalic, fontSize: typography.xl, color: colors.inkSoft,
+    letterSpacing: 0.2, lineHeight: typography.xl * 1.35, maxWidth: 300,
   },
   formPanel: { flex: 6, backgroundColor: colors.washi },
   formScroll: { flex: 1 },
@@ -252,13 +252,14 @@ const styles = StyleSheet.create({
 
   wordmarkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   wordmarkDot: { width: 9, height: 8, borderRadius: 5, backgroundColor: colors.clay },
-  wordmark: { fontFamily: fontFamily.serif, fontSize: typography.lg, color: colors.charcoal, letterSpacing: 0.6 },
+  wordmark: { fontFamily: fontFamily.display, fontSize: typography.xl, color: colors.charcoal, letterSpacing: 0.8 },
   wordmarkOnArt: { color: colors.charcoal },
 
   column: { width: '100%', maxWidth: 400, paddingHorizontal: spacing.lg, alignSelf: 'flex-start' },
   title: {
-    fontFamily: fontFamily.serif, fontSize: typography['2xl'] + 4, fontWeight: '400',
-    color: colors.charcoal, letterSpacing: 0.5, lineHeight: (typography['2xl'] + 4) * 1.2,
+    // Cormorant 的字面偏小,同样视觉大小要比 Georgia 大一号;轻字重靠大字号保证可读
+    fontFamily: fontFamily.displayLight, fontSize: typography['3xl'] + 2,
+    color: colors.charcoal, letterSpacing: 0.3, lineHeight: (typography['3xl'] + 2) * 1.1,
   },
   subtitle: {
     fontSize: typography.base, color: colors.inkSoft, lineHeight: typography.base * 1.7,
