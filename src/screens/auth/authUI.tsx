@@ -15,37 +15,40 @@ import {
 } from 'react-native';
 import Svg, { Circle, Ellipse, Line, Path } from 'react-native-svg';
 import { colors, fontFamily, radius, spacing, typography } from '../../theme';
+import { authLayout, BAND_MIN_HEIGHT, STACKED_COLUMN_MAX_WIDTH } from './authLayout';
 
 // 插画用色:鼠尾草绿的三个深浅(只在这张插画里用)
 const SAGE_LIGHT = '#CBD5C0';
 const SAGE_MID   = '#AFC0A4';
 const SAGE_DEEP  = '#8FA389';
 const CLAY_SUN   = '#C4826E';
-const WIDE_BREAKPOINT = 860;
 
 // ── 插画:远山、晨光、旗杆和几块石头 ────────────────────────────
 function CourseArt({ height, variant }: { height: number | string; variant: 'panel' | 'band' }) {
-  // 宽屏左侧面板:整幅贴底;窄屏顶部横条:裁出晨光 + 山丘这一段,保证太阳不被裁掉
+  // 宽屏左侧面板:整幅贴底;窄屏顶部横条:裁出晨光 + 山丘这一段,保证太阳不被裁掉。
+  // 太阳和旗杆都放在画面中间偏左(x≈84~316),这样面板很窄、左右被居中裁掉时它们也还在。
   const viewBox = variant === 'band' ? '0 24 400 300' : '0 0 400 420';
   const align = variant === 'band' ? 'xMidYMid slice' : 'xMidYMax slice';
   return (
     <Svg width="100%" height={height as number} viewBox={viewBox} preserveAspectRatio={align}>
       {/* 晨光(不是正圆:wabi-sabi) */}
-      <Ellipse cx={268} cy={140} rx={58} ry={55} fill={CLAY_SUN} opacity={0.82} />
-      <Ellipse cx={268} cy={140} rx={74} ry={71} fill={CLAY_SUN} opacity={0.12} />
+      <Ellipse cx={236} cy={140} rx={58} ry={55} fill={CLAY_SUN} opacity={0.82} />
+      <Ellipse cx={236} cy={140} rx={74} ry={71} fill={CLAY_SUN} opacity={0.12} />
       {/* 三层山丘 */}
       <Path d="M 0 250 C 70 205, 150 215, 215 238 C 285 262, 345 228, 400 214 L 400 420 L 0 420 Z" fill={SAGE_LIGHT} />
       <Path d="M 0 305 C 80 270, 160 292, 235 300 C 305 308, 355 286, 400 276 L 400 420 L 0 420 Z" fill={SAGE_MID} />
       <Path d="M 0 360 C 90 335, 190 352, 270 358 C 335 363, 372 350, 400 344 L 400 420 L 0 420 Z" fill={SAGE_DEEP} />
-      {/* 旗杆和旗(细线) */}
-      <Line x1={118} y1={352} x2={118} y2={268} stroke={colors.charcoal} strokeWidth={1.2} opacity={0.7} />
-      <Path d="M 118 268 L 146 276 L 118 285 Z" fill={colors.clay} opacity={0.85} />
-      {/* 石头 */}
-      <Ellipse cx={288} cy={392} rx={22} ry={8} fill={colors.stone} opacity={0.9} />
-      <Ellipse cx={318} cy={398} rx={11} ry={5} fill={colors.stone} opacity={0.75} />
-      <Ellipse cx={60}  cy={396} rx={14} ry={6} fill={colors.stone} opacity={0.7} />
-      {/* 一颗球 */}
-      <Circle cx={170} cy={386} r={5} fill={colors.linen} opacity={0.95} />
+      {/* 旗杆、石头和球都在山丘下半部分;顶部横条只露出上半截,裁出来只剩一个悬空的小三角,所以只在整幅面板里画 */}
+      {variant === 'panel' ? (
+        <>
+          <Line x1={104} y1={352} x2={104} y2={268} stroke={colors.charcoal} strokeWidth={1.2} opacity={0.7} />
+          <Path d="M 104 268 L 132 276 L 104 285 Z" fill={colors.clay} opacity={0.85} />
+          <Ellipse cx={288} cy={392} rx={22} ry={8} fill={colors.stone} opacity={0.9} />
+          <Ellipse cx={318} cy={398} rx={11} ry={5} fill={colors.stone} opacity={0.75} />
+          <Ellipse cx={60}  cy={396} rx={14} ry={6} fill={colors.stone} opacity={0.7} />
+          <Circle cx={170} cy={386} r={5} fill={colors.linen} opacity={0.95} />
+        </>
+      ) : null}
     </Svg>
   );
 }
@@ -69,7 +72,7 @@ interface ShellProps {
 
 export function AuthShell({ title, subtitle, children, footer }: ShellProps) {
   const { width } = useWindowDimensions();
-  const wide = width >= WIDE_BREAKPOINT;
+  const layout = authLayout(width);
 
   // 安静的淡入(400ms+),不弹跳
   const fade = useRef(new Animated.Value(0)).current;
@@ -82,7 +85,7 @@ export function AuthShell({ title, subtitle, children, footer }: ShellProps) {
   };
 
   const body = (
-    <Animated.View style={[styles.column, enter]}>
+    <Animated.View style={[styles.column, layout.mode === 'stacked' ? styles.columnStacked : styles.columnSplit, enter]}>
       <Text style={styles.title} accessibilityRole="header">{title}</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
       <View style={styles.formGap}>{children}</View>
@@ -90,10 +93,10 @@ export function AuthShell({ title, subtitle, children, footer }: ShellProps) {
     </Animated.View>
   );
 
-  if (wide) {
+  if (layout.mode === 'split') {
     return (
       <View style={styles.wideRoot}>
-        <View style={styles.artPanel}>
+        <View style={[styles.artPanel, { paddingHorizontal: layout.artPadding }]}>
           <View style={styles.artPanelHead}>
             <Wordmark />
             <Text style={styles.artQuote}>Every round, quietly remembered.</Text>
@@ -106,7 +109,10 @@ export function AuthShell({ title, subtitle, children, footer }: ShellProps) {
         <View style={styles.formPanel}>
           <ScrollView
             style={styles.formScroll}
-            contentContainerStyle={styles.formPanelContent}
+            contentContainerStyle={[
+              styles.formPanelContent,
+              { paddingLeft: layout.formPaddingLeft, paddingRight: layout.formPaddingRight },
+            ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -124,7 +130,7 @@ export function AuthShell({ title, subtitle, children, footer }: ShellProps) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.band} accessible={false}>
+        <View style={[styles.band, { height: layout.bandHeight }]} accessible={false}>
           <View style={styles.bandArt} pointerEvents="none"><CourseArt height="100%" variant="band" /></View>
           <View style={styles.bandHead}><Wordmark /></View>
         </View>
@@ -220,8 +226,7 @@ const styles = StyleSheet.create({
     flex: 5,
     backgroundColor: colors.sand,
     paddingTop: spacing['2xl'],
-    paddingHorizontal: spacing['2xl'],
-    overflow: 'hidden',
+    overflow: 'hidden',          // 左右内边距由 authLayout 按宽度给出
   },
   artPanelHead: { gap: spacing.md, zIndex: 1 },
   artPanelArt: { position: 'absolute', left: 0, right: 0, bottom: 0, top: '22%' },
@@ -233,14 +238,14 @@ const styles = StyleSheet.create({
   formScroll: { flex: 1 },
   formPanelContent: {
     flexGrow: 1, justifyContent: 'center',
-    paddingVertical: spacing['3xl'], paddingLeft: '11%', paddingRight: spacing['2xl'],
+    paddingVertical: spacing['3xl'],   // 左右内边距由 authLayout 按宽度给出
   },
 
   // 窄屏:上方一条插画带,下面是表单
   narrowRoot: { flex: 1, backgroundColor: colors.washi },
   narrowContent: { flexGrow: 1, paddingBottom: spacing['2xl'] },
   band: {
-    height: 232,
+    height: BAND_MIN_HEIGHT,          // 实际高度由 authLayout 按宽度给出
     backgroundColor: colors.sand,
     borderBottomLeftRadius: 56,
     borderBottomRightRadius: 20,       // 左右圆角不同:手作感
@@ -248,14 +253,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   bandArt: { ...StyleSheet.absoluteFillObject },
-  bandHead: { paddingTop: spacing.xl, paddingHorizontal: spacing.lg },
+  // 字标和下面居中的表单列对齐(同样的 maxWidth / 内边距)
+  bandHead: {
+    width: '100%', maxWidth: STACKED_COLUMN_MAX_WIDTH, alignSelf: 'center',
+    paddingTop: spacing.xl, paddingHorizontal: spacing.lg,
+  },
 
   wordmarkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   wordmarkDot: { width: 9, height: 8, borderRadius: 5, backgroundColor: colors.clay },
   wordmark: { fontFamily: fontFamily.display, fontSize: typography.xl, color: colors.charcoal, letterSpacing: 0.8 },
   wordmarkOnArt: { color: colors.charcoal },
 
-  column: { width: '100%', maxWidth: 400, paddingHorizontal: spacing.lg, alignSelf: 'flex-start' },
+  column: { width: '100%' },
+  // 分栏:表单靠左,左右留白由面板的 padding 决定
+  columnSplit: { maxWidth: 400, alignSelf: 'flex-start' },
+  // 单列:居中,而不是贴左留出一大片空白
+  columnStacked: { maxWidth: STACKED_COLUMN_MAX_WIDTH, paddingHorizontal: spacing.lg, alignSelf: 'center' },
   title: {
     // Cormorant 的字面偏小,同样视觉大小要比 Georgia 大一号;轻字重靠大字号保证可读
     fontFamily: fontFamily.displayLight, fontSize: typography['3xl'] + 2,
