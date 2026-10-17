@@ -190,3 +190,70 @@ expect "匿名/PUBLIC 不能执行,登录用户可以" A \
   "select has_function_privilege('anon','public.crew_member_handicaps(uuid)','execute') || '|' || has_function_privilege('authenticated','public.crew_member_handicaps(uuid)','execute');" "false|true"
 expect "仍然读不到别人的成绩本身(rounds 的 RLS 没被放开)" A \
   "$SU $JOIN_B $HCP_B3 $BACK select count(*) from rounds where user_id='$B';" "0"
+
+echo "── update_round / delete_round ──"
+MK="select save_round($COURSE,'White',current_date,$H9) as rid \\gset
+"     # 注意:\\gset 之后必须换行,否则同一行后面的 SQL 会被当成它的参数吞掉。9 洞,标准杆 4,每洞 5 杆 2 推 [bunker] → 45 / 18 / +9
+HNEW="(select jsonb_agg(jsonb_build_object('hole_number',g,'strokes',case when g=3 then 6 else 4 end,'putts',case when g=3 then 3 else 2 end,'troubles',case when g=3 then '[\"water\"]'::jsonb else '[]'::jsonb end) order by g) from generate_series(1,9) g)"   # 38 杆 / 19 推 / 标准杆 36 → +2
+expect "编辑后总杆/推杆/相对标准杆由服务端重新汇总,发球台更新(38/19/+2/Blue)" A \
+  "$MK select update_round(:'rid','Blue',$HNEW); select total_strokes||'/'||total_putts||'/'||score_vs_par||'/'||tee_box from rounds where id=:'rid';" "38/19/2/Blue"
+expect "逐洞数据真的被改了(第 3 洞 6 杆,其余 4 杆)" A \
+  "$MK select update_round(:'rid','Blue',$HNEW); select string_agg(strokes::text, ',' order by hole_number) from hole_scores where round_id=:'rid';" "4,4,6,4,4,4,4,4,4"
+expect "障碍也更新(第 3 洞 {water},第 1 洞的 bunker 被清掉)" A \
+  "$MK select update_round(:'rid','Blue',$HNEW); select (select troubles::text from hole_scores where round_id=:'rid' and hole_number=3) || '/' || (select troubles::text from hole_scores where round_id=:'rid' and hole_number=1);" "{water}/{}"
+expect "编辑后清空过期的 AI 分析(ai_feedback 变 null)" A \
+  "$MK update rounds set ai_feedback='old analysis' where id=:'rid'; select update_round(:'rid','White',$HNEW); select ai_feedback is null from rounds where id=:'rid';" "t"
+expect "标准杆用库里的,不能通过编辑改洞数 / 洞号" A \
+  "$MK select update_round(:'rid','White',(select jsonb_agg(jsonb_build_object('hole_number',g,'strokes',4,'putts',2)) from generate_series(1,8) g));" "invalid_holes"
+expect "洞号不属于这一轮(第 10 洞)被拒绝" A \
+  "$MK select update_round(:'rid','White',(select jsonb_agg(jsonb_build_object('hole_number',case when g=9 then 10 else g end,'strokes',4,'putts',2)) from generate_series(1,9) g));" "invalid_holes"
+expect "洞号重复被拒绝" A \
+  "$MK select update_round(:'rid','White',(select jsonb_agg(jsonb_build_object('hole_number',1,'strokes',4,'putts',2)) from generate_series(1,9) g));" "invalid_holes"
+expect "0 杆被拒绝" A \
+  "$MK select update_round(:'rid','White',(select jsonb_agg(jsonb_build_object('hole_number',g,'strokes',case when g=2 then 0 else 4 end,'putts',0)) from generate_series(1,9) g));" "invalid_holes"
+expect "推杆多于杆数被拒绝" A \
+  "$MK select update_round(:'rid','White',(select jsonb_agg(jsonb_build_object('hole_number',g,'strokes',2,'putts',3)) from generate_series(1,9) g));" "invalid_holes"
+expect "缺字段(strokes 为 null)被拒绝" A \
+  "$MK select update_round(:'rid','White',(select jsonb_agg(case when g=4 then jsonb_build_object('hole_number',g,'putts',2) else jsonb_build_object('hole_number',g,'strokes',4,'putts',2) end) from generate_series(1,9) g));" "invalid_holes"
+expect "非法障碍值被拒绝" A \
+  "$MK select update_round(:'rid','White',(select jsonb_agg(jsonb_build_object('hole_number',g,'strokes',4,'putts',2,'troubles','[\"lava\"]'::jsonb)) from generate_series(1,9) g));" "invalid_holes"
+expect "校验失败是原子的:原成绩一分不动(仍是 45)" A \
+  "$MK \\set ON_ERROR_STOP off
+savepoint s1;
+select update_round(:'rid','White',(select jsonb_agg(jsonb_build_object('hole_number',g,'strokes',case when g=9 then 99 else 4 end,'putts',2)) from generate_series(1,9) g));
+rollback to s1;
+select total_strokes from rounds where id=:'rid';" "45"
+
+OTHER_R=cccccccc-1000-0000-0000-000000000001
+MK_OTHER="insert into rounds(id,user_id,course_id,total_holes,total_strokes,total_putts,score_vs_par,ai_feedback) values ('$OTHER_R','$A','c1',9,45,18,9,'keep me'); insert into hole_scores(round_id,hole_number,par,strokes,putts) select '$OTHER_R',g,4,5,2 from generate_series(1,9) g;"
+expect "别人的成绩不能编辑(round_not_found)" B \
+  "$SU $MK_OTHER $BACK select update_round('$OTHER_R','White',$HNEW);" "round_not_found"
+expect "别人的成绩不能删除(round_not_found)" B \
+  "$SU $MK_OTHER $BACK select delete_round('$OTHER_R');" "round_not_found"
+expect "不存在的成绩 → round_not_found" A "select delete_round('cccccccc-9999-0000-0000-000000000009');" "round_not_found"
+
+PLAN_SETUP="insert into practice_plans(id,user_id,round_id,plan_text,is_active,created_at) values
+  ('dddddddd-0000-0000-0000-000000000001','$A',null,'OLD plan',false, now()-interval '5 days'),
+  ('dddddddd-0000-0000-0000-000000000002','$A','$OTHER_R','PLAN FROM THIS ROUND',true, now()-interval '1 day');"
+expect "删除成绩:成绩、逐洞数据、它生成的计划都被清掉" A \
+  "$SU $MK_OTHER $PLAN_SETUP $BACK select delete_round('$OTHER_R'); select (select count(*) from rounds where id='$OTHER_R') || '/' || (select count(*) from hole_scores where round_id='$OTHER_R') || '/' || (select count(*) from practice_plans where plan_text='PLAN FROM THIS ROUND');" "0/0/0"
+expect "被删成绩的计划原本是当前生效的 → 之前那份旧计划恢复生效" A \
+  "$SU $MK_OTHER $PLAN_SETUP $BACK select delete_round('$OTHER_R'); select is_active from practice_plans where plan_text='OLD plan';" "t"
+expect "被删成绩的计划不是当前生效的 → 当前生效的计划不受影响" A \
+  "$SU $MK_OTHER insert into practice_plans(id,user_id,round_id,plan_text,is_active,created_at) values
+     ('dddddddd-0000-0000-0000-000000000003','$A',null,'OLD plan',false, now()-interval '9 days'),
+     ('dddddddd-0000-0000-0000-000000000004','$A','$OTHER_R','PLAN FROM THIS ROUND',false, now()-interval '3 days'),
+     ('dddddddd-0000-0000-0000-000000000005','$A',null,'NEWER ACTIVE plan',true, now()-interval '1 day');
+   $BACK select delete_round('$OTHER_R'); select string_agg(plan_text||'='||is_active, ', ' order by plan_text) from practice_plans where user_id='$A';" "NEWER ACTIVE plan=true, OLD plan=false"
+expect "重复删除:第二次返回 round_not_found,不会误伤别的数据" A \
+  "$SU $MK_OTHER $BACK select delete_round('$OTHER_R'); select delete_round('$OTHER_R');" "round_not_found"
+expect "其他用户的计划不受影响" A \
+  "$SU $MK_OTHER insert into practice_plans(user_id,round_id,plan_text,is_active) values ('$B',null,'B plan',true); $BACK select delete_round('$OTHER_R'); reset role; select is_active from practice_plans where plan_text='B plan';" "t"
+expect "客户端仍可直接更新 ai_feedback(保存 AI 分析)" A \
+  "update rounds set ai_feedback='fresh analysis' where id='55555555-0000-0000-0000-000000000001' returning ai_feedback;" "fresh analysis"
+expect "客户端不能再直接改总杆(列级权限)" A \
+  "update rounds set total_strokes=1 where id='55555555-0000-0000-0000-000000000001';" "permission denied"
+expect "客户端不能直接删成绩(没有 DELETE 策略/权限路径之外的口子)" A \
+  "with d as (delete from rounds where id='55555555-0000-0000-0000-000000000001' returning 1) select count(*) from d;" "0"
+expect "匿名/PUBLIC 不能执行,登录用户可以" A \
+  "select has_function_privilege('anon','public.update_round(uuid,text,jsonb)','execute') || '|' || has_function_privilege('anon','public.delete_round(uuid)','execute') || '|' || has_function_privilege('authenticated','public.update_round(uuid,text,jsonb)','execute') || '|' || has_function_privilege('authenticated','public.delete_round(uuid)','execute');" "false|false|true|true"

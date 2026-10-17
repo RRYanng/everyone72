@@ -15,7 +15,7 @@ function loadSource(relative) {
   return loaded.exports;
 }
 
-const { roundHoles, per18, averagePer18, handicap18, bestScores, formatBestScores } =
+const { roundHoles, per18, averagePer18, handicap18, bestScores, formatBestScores, roundTotals, hasRoundChanged } =
   loadSource('src/lib/roundStats.ts');
 
 const r = (holes, strokes, putts, vsPar) => ({
@@ -82,4 +82,23 @@ test('best scores: a missing kind shows a dash, odd hole counts are ignored', ()
 test('handicap rounding matches the SQL function on a negative .5 tie (-0.25 -> -0.2, not -0.3)', () => {
   const rounds = [-1, 0, 0, 0, 5, 5, 5].map(v => r(18, 72 + v, 30, v));
   assert.equal(handicap18(rounds), -0.2);
+});
+
+const hole = (n, par, strokes, putts, troubles = []) => ({ hole_number: n, par, strokes, putts, troubles });
+
+test('roundTotals matches the server rule: sum strokes, sum putts, strokes minus the par from the data', () => {
+  const holes = [hole(1, 4, 5, 1), hole(2, 4, 4, 2), hole(3, 3, 5, 3)];
+  assert.deepEqual(roundTotals(holes), { strokes: 14, putts: 6, vsPar: 3 });   // par 11
+  assert.deepEqual(roundTotals([]), { strokes: 0, putts: 0, vsPar: 0 });
+});
+
+test('hasRoundChanged: identical -> false; any strokes / putts / trouble change -> true; trouble order ignored', () => {
+  const base = [hole(1, 4, 5, 1, ['water', 'ob']), hole(2, 4, 4, 2)];
+  const copy = base.map(h => ({ ...h, troubles: [...h.troubles] }));
+  assert.equal(hasRoundChanged(base, copy), false);
+  assert.equal(hasRoundChanged(base, [{ ...copy[0], troubles: ['ob', 'water'] }, copy[1]]), false);
+  assert.equal(hasRoundChanged(base, [{ ...copy[0], strokes: 6 }, copy[1]]), true);
+  assert.equal(hasRoundChanged(base, [copy[0], { ...copy[1], putts: 3 }]), true);
+  assert.equal(hasRoundChanged(base, [{ ...copy[0], troubles: ['water'] }, copy[1]]), true);
+  assert.equal(hasRoundChanged(base, [copy[0]]), true);
 });

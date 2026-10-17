@@ -86,3 +86,29 @@ export function bestScores(rounds: RoundStatsInput[]): BestScores {
 export function formatBestScores(b: BestScores): string {
   return `Best 18: ${b.best18 ?? '—'} · Best 9: ${b.best9 ?? '—'}`;
 }
+
+export interface HoleEdit {
+  hole_number: number;
+  par: number;
+  strokes: number;
+  putts: number;
+  troubles?: string[] | null;
+}
+
+/** 编辑页的实时汇总,和服务端 update_round() 的汇总规则一致:总杆 / 推杆 / 相对标准杆。 */
+export function roundTotals(holes: HoleEdit[]): { strokes: number; putts: number; vsPar: number } {
+  const strokes = holes.reduce((s, h) => s + h.strokes, 0);
+  const putts   = holes.reduce((s, h) => s + h.putts, 0);
+  const par     = holes.reduce((s, h) => s + h.par, 0);
+  return { strokes, putts, vsPar: strokes - par };
+}
+
+/** 编辑页的"保存"按钮只在有改动时可用:比较杆数 / 推杆 / 障碍(障碍不分顺序)。 */
+export function hasRoundChanged(before: HoleEdit[], after: HoleEdit[]): boolean {
+  if (before.length !== after.length) return true;
+  const key = (h: HoleEdit) =>
+    `${h.hole_number}:${h.strokes}:${h.putts}:${[...(h.troubles ?? [])].sort().join('+')}`;
+  const b = before.map(key).sort();
+  const a = after.map(key).sort();
+  return b.some((k, i) => k !== a[i]);
+}

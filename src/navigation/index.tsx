@@ -35,6 +35,7 @@ import HomeScreen from '../screens/home/HomeScreen';
 import CourseSearchScreen from '../screens/scorecard/CourseSearchScreen';
 import ScorecardScreen from '../screens/scorecard/ScorecardScreen';
 import AnalysisScreen from '../screens/scorecard/AnalysisScreen';
+import EditRoundScreen from '../screens/scorecard/EditRoundScreen';
 import HistoryScreen from '../screens/history/HistoryScreen';
 
 // Phase 2
@@ -83,6 +84,7 @@ export type RootStackParamList = {
   CourseSearch: undefined;
   Scorecard: { courseId: string; totalHoles: 9 | 18; teeBox: string };
   Analysis: { roundId: string };
+  EditRound: { roundId: string };
   // Phase 2
   PracticeCheckIn: undefined;
   Leaderboard: undefined;
@@ -163,6 +165,7 @@ function AuthenticatedStack() {
       <RootStack.Screen name="CourseSearch"    component={CourseSearchScreen} options={{ presentation: 'modal' }} />
       <RootStack.Screen name="Scorecard"       component={ScorecardScreen} />
       <RootStack.Screen name="Analysis"        component={AnalysisScreen} />
+      <RootStack.Screen name="EditRound"       component={EditRoundScreen} />
       {/* Phase 2 */}
       <RootStack.Screen name="PracticeCheckIn" component={PracticeCheckInScreen} options={{ presentation: 'modal' }} />
       <RootStack.Screen name="Leaderboard"     component={LeaderboardScreen} />

@@ -14,7 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 
 import { supabase } from '../../lib/supabase';
-import { notify } from '../../lib/dialog';
+import { notify, confirmAction } from '../../lib/dialog';
+import { deleteRound, roundActionMessage } from '../../lib/roundActions';
 import { analyzeRound, generatePracticePlan, aiErrorMessage } from '../../lib/claude';
 import { isOfflineContent } from '../../lib/analysisSource';
 import { hasIncorrectRoundFactCount } from '../../lib/parStreak';
@@ -100,6 +101,7 @@ export default function AnalysisScreen() {
   const [loadingData, setLoadingData] = useState(true);
   const [loadingAI, setLoadingAI] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [practicePlan, setPracticePlan] = useState<string>('');
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [planSaved, setPlanSaved] = useState(false);
@@ -251,6 +253,24 @@ export default function AnalysisScreen() {
       console.warn('[PracticePlan] generation error:', err);
     }
     setLoadingPlan(false);
+  };
+
+  // 删除整轮成绩:服务端一并清理逐洞成绩和它生成的练习计划(并恢复之前生效的那份)
+  const handleDelete = async () => {
+    const ok = await confirmAction(
+      'Delete this round?',
+      'This permanently removes the round, its hole-by-hole scores and the practice plan it generated. Your stats will be recalculated.',
+      'Delete', true,
+    );
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await deleteRound(roundId);
+      navigation.popToTop();   // 首页获得焦点时会重新拉取成绩,统计随之更新
+    } catch (err) {
+      setDeleting(false);
+      notify('Could not delete', roundActionMessage(err));
+    }
   };
 
   const scoreColor = (vs_par: number) => {
@@ -426,6 +446,24 @@ export default function AnalysisScreen() {
             );
           })}
         </Card>
+
+        {!isDevMockActive() && round && holeScores.length > 0 ? (
+          <View style={styles.manageRow}>
+            <SecondaryButton
+              label="Edit scores"
+              onPress={() => navigation.navigate('EditRound', { roundId })}
+              disabled={deleting}
+              style={{ flex: 1 }}
+            />
+            <SecondaryButton
+              label={deleting ? 'Deleting…' : 'Delete round'}
+              onPress={handleDelete}
+              loading={deleting}
+              style={{ flex: 1 }}
+              accessibilityHint="Permanently deletes this round"
+            />
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -551,6 +589,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingVertical: spacing.md,
+  },
+  manageRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
   aiLoadingText: {
     color: colors.text.secondary,
