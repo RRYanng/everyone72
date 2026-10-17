@@ -8,6 +8,7 @@ import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Navigation from './src/navigation';
 import ToastContainer from './src/components/Toast';
+import DialogHost from './src/components/DialogHost';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { registerForPushNotifications } from './src/lib/notifications';
 import { initMonitoring } from './src/lib/monitoring';
@@ -28,6 +29,8 @@ export default function App() {
         <Navigation />
         {/* 全局 Toast 容器 — 悬浮在所有内容上方 */}
         <ToastContainer />
+        {/* 网页端的应用内确认/提示弹窗(window.confirm 在内置浏览器里不可用) */}
+        <DialogHost />
       </View>
     </ErrorBoundary>
   );
