@@ -8,7 +8,6 @@ import {
   SafeAreaView, ActivityIndicator, TextInput,
 } from 'react-native';
 import { confirmAction, notify } from '../../lib/dialog';
-import { handicap18 } from '../../lib/roundStats';
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -97,13 +96,12 @@ export default function CrewDetailScreen() {
       .select('user_id, current_streak, total_practices')
       .in('user_id', userIds);
 
-    // 4. Get recent rounds for handicap computation (last 20 per member)
-    const { data: roundRows } = await supabase
-      .from('rounds')
-      .select('user_id, score_vs_par, total_holes')
-      .in('user_id', userIds)
-      .order('created_at', { ascending: false })
-      .limit(200);
+    // 4. 成员 HCP:由服务端函数算好,只返回 (user_id, handicap),看不到任何一轮的成绩。
+    //    (rounds 的 RLS 只让人读自己的行,所以以前别人的 HCP 永远是空的。)
+    //    函数不可用时(例如迁移还没上线)只是不显示 HCP,不影响页面其他部分。
+    const { data: hcpRows, error: hcpErr } = await supabase
+      .rpc('crew_member_handicaps', { p_crew_id: crewId });
+    if (hcpErr) console.warn('[CrewDetail] handicap lookup unavailable:', hcpErr.message);
 
     // Build lookup maps
     const profileMap: Record<string, string> = {};
@@ -114,10 +112,9 @@ export default function CrewDetailScreen() {
       statsMap[s.user_id] = { streak: s.current_streak, practices: s.total_practices };
     });
 
-    const roundsMap: Record<string, { score_vs_par: number; total_holes: number | null }[]> = {};
-    (roundRows ?? []).forEach(r => {
-      if (!roundsMap[r.user_id]) roundsMap[r.user_id] = [];
-      if (roundsMap[r.user_id].length < 20) roundsMap[r.user_id].push(r);
+    const hcpMap: Record<string, number> = {};
+    ((hcpRows ?? []) as { user_id: string; handicap: number | string }[]).forEach(h => {
+      hcpMap[h.user_id] = Number(h.handicap);
     });
 
     const enriched: CrewMember[] = memberRows.map(m => ({
@@ -125,7 +122,7 @@ export default function CrewDetailScreen() {
       username:         profileMap[m.user_id] ?? 'Unknown',
       current_streak:   statsMap[m.user_id]?.streak    ?? 0,
       total_practices:  statsMap[m.user_id]?.practices ?? 0,
-      recent_handicap:  handicap18(roundsMap[m.user_id] ?? []),
+      recent_handicap:  hcpMap[m.user_id] ?? null,
     }));
 
     setMembers(enriched);
