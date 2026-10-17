@@ -16,6 +16,14 @@ export const colors = {
   shiro: '#FFFFFF',       // 白：卡片背景
   pill: '#EEE8DF',        // 浅米 pill 背景（review/tag 标签）
   sumiDivider: '#3C3A36', // 深色 footer 上的分割线
+  // Japandi 登录/注册页专用(来自 designbrief 的 Japandi 风格:全部是带暖色调的自然色)
+  sand: '#EDE5D8',        // 沙:插画面板底色
+  linen: '#FDFBF8',       // 亚麻白:输入框/卡片(不用纯白)
+  stone: '#D4CCC4',       // 石:暖灰边框
+  charcoal: '#3D3530',    // 暖炭:主按钮
+  clay: '#B5704D',        // 陶土:强调 / 温和的错误色
+  clayTint: '#F3E4DA',    // 陶土 · 浅:错误提示底色
+  inkSoft: '#6D655D',     // 次要文字(比 text.secondary 对比度更高,满足 AA)
   text: {
     primary: '#2C2A26',
     secondary: '#7A7670',
