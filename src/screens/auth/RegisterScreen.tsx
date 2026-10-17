@@ -12,6 +12,9 @@ import { supabase } from '../../lib/supabase';
 import { AuthShell, AuthField, AuthNotice, AuthButton, AuthLink } from './authUI';
 import { colors } from '../../theme';
 
+// 密码最短长度:需要和 Supabase Auth 设置里的 Minimum password length 一致(Dashboard → Authentication)
+export const MIN_PASSWORD_LENGTH = 8;
+
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 };
@@ -31,7 +34,7 @@ export default function RegisterScreen({ navigation }: Props) {
     if (!username.trim()) { setError('Please enter a username.'); return; }
     if (!email.trim())    { setError('Please enter your email.'); return; }
     if (!password)        { setError('Please enter a password.'); return; }
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (password.length < MIN_PASSWORD_LENGTH) { setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
 
     setLoading(true);
 
@@ -48,7 +51,7 @@ export default function RegisterScreen({ navigation }: Props) {
         } else if (msg.includes('invalid') && msg.includes('email')) {
           setError('Please enter a valid email address.');
         } else if (msg.includes('Password')) {
-          setError('Password too weak. Use at least 6 characters.');
+          setError(`Password too weak. Use at least ${MIN_PASSWORD_LENGTH} characters.`);
         } else {
           setError(msg);
         }
@@ -127,7 +130,7 @@ export default function RegisterScreen({ navigation }: Props) {
       />
       <AuthField
         label="Password"
-        placeholder="At least 6 characters"
+        placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
         value={password}
         onChangeText={(t) => { setPassword(t); setError(null); }}
         secureTextEntry={!showPwd}

@@ -13,7 +13,7 @@ expect "创建者在同一事务内能读到自己的 crew 和 owner 成员行" 
   "select count(*) from create_crew('N2'); select (select count(*) from crews where creator_id=auth.uid() and name='N2') || '/' || (select count(*) from crew_members cm join crews c on c.id=cm.crew_id where c.name='N2' and cm.role='owner' and cm.user_id=auth.uid());" "1/1"
 expect "create_crew 拒绝空名字" A "select create_crew('   ');" "invalid_name"
 expect "B 用小写邀请码加入" B "select join_crew('abc123') = '$CREW' as joined;" "t"
-expect "无效邀请码" B "select join_crew('NOPE00');" "invalid_code"
+expect "无效邀请码返回 NULL(不 raise:失败记录要提交才能限频)" B "select join_crew('NOPE00') is null;" "t"
 expect "重复加入" A "select join_crew('ABC123');" "already_member"
 expect "满员拒绝" C "$SU update crews set max_members=2 where id='$CREW'; insert into crew_members(crew_id,user_id) values ('$CREW','$B'); $BACK select join_crew('ABC123');" "crew_full"
 expect "局外人看不到别人的 crew / 成员" C "select (select count(*) from crews) || '/' || (select count(*) from crew_members);" "0/0"
@@ -72,13 +72,9 @@ expect "非好友不能对看不到的打卡点赞" C "insert into reactions(pra
 expect "好友可以评论" B "insert into reactions(practice_log_id,user_id,type,content) values ('$LOG','$B','comment','nice') returning type;" "comment"
 
 echo "── user_stats / waitlist ──"
-expect "匿名读 user_stats 得不到数据" ANON "select count(*) from user_stats;" "0"
+expect "匿名读 user_stats 被拒绝" ANON "select count(*) from user_stats;" "permission denied"
 expect "登录用户能读 user_stats(排行榜)" B "select count(*) from user_stats;" "1"
 expect "匿名无权读 streak_leaderboard" A "select has_table_privilege('anon','public.streak_leaderboard','select');" "f"
-expect "匿名可以加入候补(不带 user_id;应用端不带 returning)" ANON "insert into coach_waitlist(email) values ('x@y.com'); reset role; select count(*) from coach_waitlist where email='x@y.com';" "1"
-expect "匿名不能冒用 user_id 加入候补" ANON "insert into coach_waitlist(email,user_id) values ('x@y.com','$A');" "row-level security"
-expect "登录用户不能冒用别人的 user_id" B "insert into coach_waitlist(email,user_id) values ('b@y.com','$A');" "row-level security"
-expect "登录用户可以用自己的 user_id" B "insert into coach_waitlist(email,user_id) values ('b@y.com','$B') returning email;" "b@y.com"
 
 echo "── public_profiles ──"
 expect "登录用户能读到别人的 username" B "select username from public_profiles where id='$A';" "alice"
@@ -99,8 +95,10 @@ expect "逐洞数据和 troubles 一并写入" A \
    select count(*)||'/'||(select count(*) from hole_scores where round_id=:'id' and troubles = '{bunker}') from hole_scores where round_id = :'id';" "9/9"
 expect "已存在的球场不会被覆盖(评分仍是 72.0)" A \
   "select save_round($COURSE,'White',current_date,$H9); select course_rating from courses where id='c1';" "72.0"
-expect "新球场会被插入" A \
-  "select save_round(jsonb_build_object('id','new-course','name','New','course_rating',70.1,'slope_rating',120,'total_par',72),'Blue',current_date,$H9); select name from courses where id='new-course';" "New"
+expect "球场不在库里 → unknown_course(客户端不能再靠保存成绩创建球场)" A \
+  "select save_round(jsonb_build_object('id','new-course','name','New','course_rating',70.1,'slope_rating',120,'total_par',72),'Blue',current_date,$H9);" "unknown_course"
+expect "被拒绝的保存没有创建球场" A \
+  "do \$\$ begin perform save_round(jsonb_build_object('id','new-course','name','New'),'Blue',current_date,$H9); exception when others then null; end \$\$; reset role; select count(*) from courses where id='new-course';" "0"
 expect "非法杆数(0)被拒绝,且不留下半成品 round" A \
   "select save_round($COURSE,'White',current_date,(select jsonb_agg(jsonb_build_object('hole_number',g,'par',4,'strokes',case when g=3 then 0 else 5 end,'putts',2,'troubles','[]'::jsonb)) from generate_series(1,9) g));" "invalid_holes"
 expect "推杆多于杆数被拒绝" A \
@@ -327,3 +325,115 @@ expect "上限按用户隔离:A 满额不影响 B" B \
   "reset role; insert into app_events(user_id,name) select '$A','login' from generate_series(1,300); set local role authenticated; select track_event('login');" "t"
 expect "账号删除时该用户的事件随之删除" A \
   "reset role; insert into app_events(user_id,name) values ('$A','login'),('$B','login'); delete from auth.users where id='$A'; select count(*) || '|' || (select count(*) from app_events where user_id='$B') from app_events where user_id='$A';" "0|1"
+
+# ============================================================
+# P2 加固
+# ============================================================
+UTC_TODAY="(now() at time zone 'utc')::date"
+
+echo "── 照片 bucket 私有 ──"
+expect "bucket 已私有,限制 5MB 和图片类型" A \
+  "select public::text || '|' || file_size_limit || '|' || array_to_string(allowed_mime_types, ',') from storage.buckets where id='practice-photos';" \
+  "false|5242880|image/jpeg,image/png,image/webp,image/heic,image/heif"
+expect "旧的\"任何人可读\"策略已删除" A \
+  "select count(*) from pg_policies where schemaname='storage' and tablename='objects' and policyname='Public can view practice photos';" "0"
+PH="reset role; insert into storage.objects(bucket_id,name) values ('practice-photos','$A/a.jpg'),('practice-photos','$B/b.jpg'),('practice-photos','$C/c.jpg');"
+expect "本人能读自己的照片;已接受的好友(A↔B)能互相读;陌生人(C)的读不到" A \
+  "$PH set local role authenticated; select string_agg(substr(name,1,1), ',' order by name) from storage.objects where bucket_id='practice-photos';" "a,b"
+expect "好友关系是双向的:B 读得到 A 的" B \
+  "$PH set local role authenticated; select string_agg(substr(name,1,1), ',' order by name) from storage.objects where bucket_id='practice-photos';" "a,b"
+expect "C 只读得到自己的" C \
+  "$PH set local role authenticated; select string_agg(substr(name,1,1), ',' order by name) from storage.objects where bucket_id='practice-photos';" "c"
+expect "pending 的好友请求不算:A 向 C 发了请求,但 A 仍读不到 C 的" A \
+  "$PH insert into friendships(user_id,friend_id,status) values ('$A','$C','pending'); set local role authenticated; select count(*) from storage.objects where name like '$C/%';" "0"
+expect "匿名读不到任何照片" ANON \
+  "$PH set local role anon; select count(*) from storage.objects;" "0"
+expect "只能上传到自己的目录" A \
+  "insert into storage.objects(bucket_id,name) values ('practice-photos','$A/new.jpg') returning name;" "$A/new.jpg"
+expect "不能上传到别人的目录" A \
+  "insert into storage.objects(bucket_id,name) values ('practice-photos','$B/evil.jpg');" "row-level security"
+expect "不能再嵌套子目录" A \
+  "insert into storage.objects(bucket_id,name) values ('practice-photos','$A/sub/x.jpg');" "row-level security"
+
+echo "── user_stats / streak 由服务端计算 ──"
+expect "迁移里的校正:种子里被写成 3 的 streak,按真实打卡记录重放后是 1" A \
+  "select current_streak || '|' || total_practices from user_stats where user_id='$A';" "1|1"
+expect "客户端不能改自己的 streak" A "update user_stats set current_streak = 9999 where user_id = auth.uid();" "permission denied"
+expect "客户端不能插入 user_stats" B "insert into user_stats(user_id, current_streak) values ('$B', 9999);" "permission denied"
+expect "客户端不能删除 user_stats" A "delete from user_stats where user_id = auth.uid();" "permission denied"
+expect "apply_practice_day 客户端调不了" A \
+  "select has_function_privilege('anon','public.apply_practice_day(uuid,date,timestamptz)','execute') || '|' || has_function_privilege('authenticated','public.apply_practice_day(uuid,date,timestamptz)','execute');" "false|false"
+expect "第一次打卡:streak 1、总数 1、last = 今天" C \
+  "insert into practice_logs(user_id, note) values ('$C','x'); select current_streak || '|' || total_practices || '|' || (last_practice_date = $UTC_TODAY) from user_stats where user_id='$C';" "1|1|true"
+expect "同一天再打卡不重复计" C \
+  "insert into practice_logs(user_id, note) values ('$C','x'),('$C','y'); select current_streak || '|' || total_practices from user_stats where user_id='$C';" "1|1"
+expect "昨天打过 → 连续:2 → 3,并解锁 streak_3" C \
+  "reset role; insert into user_stats(user_id,current_streak,longest_streak,total_practices,last_practice_date) values ('$C',2,2,2,$UTC_TODAY - 1); set local role authenticated; insert into practice_logs(user_id, note) values ('$C','x'); select current_streak || '|' || longest_streak || '|' || total_practices || '|' || (select string_agg(b->>'id', ',') from user_stats u, jsonb_array_elements(u.badges) b where u.user_id='$C') from user_stats where user_id='$C';" "3|3|3|streak_3"
+expect "断了 → 重置为 1,最长保留" C \
+  "reset role; insert into user_stats(user_id,current_streak,longest_streak,total_practices,last_practice_date) values ('$C',5,5,5,$UTC_TODAY - 3); set local role authenticated; insert into practice_logs(user_id, note) values ('$C','x'); select current_streak || '|' || longest_streak || '|' || total_practices from user_stats where user_id='$C';" "1|5|6"
+expect "streak 6 → 7:同时解锁 streak_3 和 streak_7" C \
+  "reset role; insert into user_stats(user_id,current_streak,longest_streak,total_practices,last_practice_date) values ('$C',6,6,6,$UTC_TODAY - 1); set local role authenticated; insert into practice_logs(user_id, note) values ('$C','x'); select string_agg(b->>'id', ',' order by b->>'id') from user_stats u, jsonb_array_elements(u.badges) b where u.user_id='$C';" "streak_3,streak_7"
+expect "第 100 次练习解锁 practices_100" C \
+  "reset role; insert into user_stats(user_id,current_streak,longest_streak,total_practices,last_practice_date) values ('$C',1,1,99,$UTC_TODAY - 5); set local role authenticated; insert into practice_logs(user_id, note) values ('$C','x'); select string_agg(b->>'id', ',') from user_stats u, jsonb_array_elements(u.badges) b where u.user_id='$C';" "practices_100"
+expect "已有的勋章不会重复发" C \
+  "reset role; insert into user_stats(user_id,current_streak,longest_streak,total_practices,last_practice_date,badges) values ('$C',3,3,3,$UTC_TODAY - 1,'[{\"id\":\"streak_3\",\"emoji\":\"x\",\"label\":\"x\",\"earned_at\":\"2026-01-01T00:00:00Z\"}]'); set local role authenticated; insert into practice_logs(user_id, note) values ('$C','x'); select jsonb_array_length(badges) from user_stats where user_id='$C';" "1"
+expect "客户端传的日期超出 UTC 日期 ±1 天 → 按服务端日期(伪造不了未来的天数)" C \
+  "insert into practice_logs(user_id, note, local_date) values ('$C','x', $UTC_TODAY + 30) returning (local_date = $UTC_TODAY);" "t"
+expect "明天(时区领先)在允许范围内" C \
+  "insert into practice_logs(user_id, note, local_date) values ('$C','x', $UTC_TODAY + 1) returning (local_date = $UTC_TODAY + 1);" "t"
+expect "不传日期默认用 UTC 今天" C "insert into practice_logs(user_id, note) values ('$C','x') returning (local_date = $UTC_TODAY);" "t"
+expect "streak 排行榜读得到别人刚打的卡" B \
+  "reset role; insert into practice_logs(user_id, note) values ('$C','x'); set local role authenticated; select current_streak from streak_leaderboard where user_id='$C';" "1"
+
+echo "── courses 服务端权威 ──"
+expect "客户端不能 insert courses" A "insert into courses(id,name) values ('evil','x');" "permission denied"
+expect "客户端不能 update courses" A "update courses set course_rating = 1 where id='torrey-pines-south';" "permission denied"
+expect "客户端不能 delete courses" A "delete from courses where id='torrey-pines-south';" "permission denied"
+expect "匿名和登录用户仍然读得到球场" ANON "select count(*) >= 262 from courses;" "t"
+expect "262 个种子球场都在,每个都有 18 个标准杆" A \
+  "select count(*) from courses where holes_par is not null and array_length(holes_par,1) = 18;" "262"
+expect "每个种子球场的 total_par 等于逐洞标准杆之和" A \
+  "select count(*) from courses where holes_par is not null and (select sum(x) from unnest(holes_par) x) <> total_par;" "0"
+TP="(select jsonb_agg(jsonb_build_object('hole_number', g, 'par', holes_par[g], 'strokes', holes_par[g] + 1, 'putts', 2) order by g) from courses, generate_series(1,18) g where id='torrey-pines-south')"
+expect "标准杆和库里一致 → 保存成功" A "select save_round(jsonb_build_object('id','torrey-pines-south'),'White',current_date,$TP) is not null;" "t"
+expect "有一洞的标准杆被改 → invalid_holes(不能靠改标准杆操纵相对标准杆)" A \
+  "select save_round(jsonb_build_object('id','torrey-pines-south'),'White',current_date,(select jsonb_agg(case when e->>'hole_number' = '1' then jsonb_set(e,'{par}','5') else e end) from jsonb_array_elements($TP) e));" "invalid_holes"
+expect "保存的成绩用的是库里的球场数据,相对标准杆按真实标准杆算" A \
+  "select save_round(jsonb_build_object('id','torrey-pines-south','course_rating',1,'total_par',3),'White',current_date,$TP) as rid \\gset
+   select score_vs_par from rounds where id = :'rid';" "18"
+expect "旧版客户端多传的球场字段被忽略,球场数据不变" A \
+  "select save_round(jsonb_build_object('id','torrey-pines-south','name','HACKED','course_rating',1),'White',current_date,$TP) is not null; reset role; select name || '|' || course_rating from courses where id='torrey-pines-south';" "Torrey Pines Golf Course (South)|76.9"
+
+echo "── Crew 邀请码限频 ──"
+expect "失败的尝试被记下来(NULL 返回,事务提交)" B \
+  "select join_crew('NOPE01') is null; reset role; select count(*) from crew_join_failures where user_id='$B';" "1"
+expect "失败记录客户端读不到" B "select count(*) from crew_join_failures;" "permission denied"
+expect "15 分钟内失败 8 次后,第 9 次被拒绝" B \
+  "select count(*) from generate_series(1,8) g, lateral (select join_crew('NOPE' || g)) j; select join_crew('NOPE99');" "too_many_attempts"
+expect "限频期间连正确的邀请码也不行" B \
+  "select count(*) from generate_series(1,8) g, lateral (select join_crew('NOPE' || g)) j; select join_crew('ABC123');" "too_many_attempts"
+expect "没到上限时,正确的邀请码仍然能加入" B \
+  "select join_crew('NOPE01') is null; select join_crew('NOPE02') is null; select join_crew('abc123') = '$CREW';" "t"
+expect "15 分钟之前的失败不挡路(8 次都在 20 分钟前)" B \
+  "reset role; insert into crew_join_failures(user_id, created_at) select '$B', now() - interval '20 minutes' - g * interval '1 second' from generate_series(1,8) g; set local role authenticated; select join_crew('abc123') = '$CREW';" "t"
+expect "24 小时内累计失败 30 次 → 拒绝(哪怕每次间隔很久)" B \
+  "reset role; insert into crew_join_failures(user_id, created_at) select '$B', now() - interval '2 hours' - g * interval '10 minutes' from generate_series(1,30) g; set local role authenticated; select join_crew('abc123');" "too_many_attempts"
+expect "限频按用户隔离:B 被限了,C 不受影响" C \
+  "reset role; insert into crew_join_failures(user_id) select '$B' from generate_series(1,8); set local role authenticated; select join_crew('abc123') = '$CREW';" "t"
+
+echo "── 候补名单 join_coach_waitlist ──"
+expect "登录用户可以加入,邮箱被规范成小写并记录自己的 user_id" B \
+  "select join_coach_waitlist('  Test@Example.COM '); reset role; select email || '|' || (user_id = '$B') from coach_waitlist;" "test@example.com|true"
+expect "已在名单里(不分大小写)当作成功,不重复新增" B \
+  "select join_coach_waitlist('a@b.co'); select join_coach_waitlist('A@B.CO'); reset role; select count(*) from coach_waitlist where lower(email)='a@b.co';" "1"
+expect "邮箱格式不对被拒绝" B "select join_coach_waitlist('not-an-email');" "invalid_email"
+expect "空邮箱被拒绝" B "select join_coach_waitlist('   ');" "invalid_email"
+expect "超长邮箱被拒绝" B "select join_coach_waitlist(repeat('a',250) || '@b.co');" "invalid_email"
+expect "每个用户 24 小时最多新增 3 条" B \
+  "select join_coach_waitlist('a1@b.co'), join_coach_waitlist('a2@b.co'), join_coach_waitlist('a3@b.co'); select join_coach_waitlist('a4@b.co');" "too_many_requests"
+expect "匿名不能调用" A \
+  "select has_function_privilege('anon','public.join_coach_waitlist(text)','execute') || '|' || has_function_privilege('authenticated','public.join_coach_waitlist(text)','execute');" "false|true"
+expect "登录用户不能绕过函数直接写表" B "insert into coach_waitlist(email,user_id) values ('x@y.com','$B');" "permission denied"
+expect "匿名不能直接写表" ANON "insert into coach_waitlist(email) values ('x@y.com');" "permission denied"
+expect "登录用户读得到自己登记的条目,看不到别人的" A \
+  "reset role; insert into coach_waitlist(email,user_id) values ('mine@y.com','$A'),('other@y.com','$B'); set local role authenticated; select count(*) from coach_waitlist;" "1"

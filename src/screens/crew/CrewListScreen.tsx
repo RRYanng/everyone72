@@ -106,12 +106,15 @@ export default function CrewListScreen() {
     setJoining(false);
     if (error || !crewId) {
       const messages: Record<string, string> = {
-        invalid_code:   'Invite code not found. Please check and try again.',
-        already_member: "You're already a member of this crew.",
-        crew_full:      'This crew is full.',
+        invalid_code:      'Invite code not found. Please check and try again.',
+        already_member:    "You're already a member of this crew.",
+        crew_full:         'This crew is full.',
+        too_many_attempts: 'Too many incorrect codes. Please wait a few minutes and try again.',
       };
-      if (!messages[error?.message ?? '']) console.error('[JoinCrew] rpc error:', error);
-      setJoinError(messages[error?.message ?? ''] ?? 'Failed to join. Please check your connection and try again.');
+      // 服务端对"没有这个邀请码"返回 NULL(不报错,这样失败次数才能被记住并限频)
+      const code = error ? error.message : 'invalid_code';
+      if (!messages[code]) console.error('[JoinCrew] rpc error:', error);
+      setJoinError(messages[code] ?? 'Failed to join. Please check your connection and try again.');
       return;
     }
     track('crew_joined');

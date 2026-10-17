@@ -39,6 +39,7 @@ for _ in $(seq 1 60); do
 done
 docker exec -i "$NAME" psql -U postgres -q < "$HERE/baseline_live_public.sql" 2>&1 | grep -E "ERROR" && { echo "基线加载失败"; exit 2; }
 psql_su < "$HERE/seed.sql" >/dev/null || { echo "seed 失败"; exit 2; }
+docker exec -i -e PGPASSWORD=pw "$NAME" psql -h 127.0.0.1 -U supabase_admin -d postgres -qtA -v ON_ERROR_STOP=1 < "$HERE/storage_stub.sql" >/dev/null 2>"$HERE/.stub.err" || { cat "$HERE/.stub.err"; echo "storage 桩失败"; rm -f "$HERE/.stub.err"; exit 2; }; rm -f "$HERE/.stub.err"
 for f in "$MIG"/*.sql; do
   echo "▶ 应用 $(basename "$f")"
   out=$(psql_su < "$f") || { echo "$out" | grep -E "ERROR|错误" ; echo "迁移失败: $f"; exit 2; }

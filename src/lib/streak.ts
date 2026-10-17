@@ -1,56 +1,24 @@
 // ============================================================
-// Streak & Badge 系统
-// 每次练习打卡后调用 updateStreak(userId)
-// 自动计算连续天数、更新勋章
+// Streak & Badge 系统 —— 客户端只读。
+//
+// 连续天数、总次数和勋章都由服务端计算:每次插入 practice_logs,
+// 触发器 apply_practice_day() 更新 user_stats(见迁移 20261017100100)。
+// user_stats 对客户端只有 SELECT 权限,所以客户端既不需要、也不可能自己写。
+// 这里只负责读取,以及对比打卡前后的勋章来提示"新解锁"。
 // ============================================================
 
 import { supabase } from './supabase';
 import { UserStats, Badge } from '../types';
 import { isDevMockActive, MOCK_USER_STATS } from './mockUser';
 
-// ── 勋章定义 ─────────────────────────────────────────────────
-export const BADGE_DEFS: { id: string; emoji: string; label: string; check: (s: UserStats) => boolean }[] = [
-  {
-    id: 'streak_3',
-    emoji: '🔥',
-    label: '3-Day Streak',
-    check: s => s.current_streak >= 3,
-  },
-  {
-    id: 'streak_7',
-    emoji: '⚡',
-    label: '7-Day Streak',
-    check: s => s.current_streak >= 7,
-  },
-  {
-    id: 'streak_30',
-    emoji: '🏆',
-    label: '30-Day Streak',
-    check: s => s.current_streak >= 30,
-  },
-  {
-    id: 'plans_10',
-    emoji: '🎯',
-    label: '10 AI Plans Completed',
-    check: s => s.ai_plans_completed >= 10,
-  },
-  {
-    id: 'practices_100',
-    emoji: '💪',
-    label: '100 Practice Sessions',
-    check: s => s.total_practices >= 100,
-  },
+// ── 勋章展示用的定义(解锁规则在服务端,和 apply_practice_day 保持一致)──────────────
+export const BADGE_DEFS: { id: string; emoji: string; label: string }[] = [
+  { id: 'streak_3',      emoji: '🔥', label: '3-Day Streak' },
+  { id: 'streak_7',      emoji: '⚡', label: '7-Day Streak' },
+  { id: 'streak_30',     emoji: '🏆', label: '30-Day Streak' },
+  { id: 'plans_10',      emoji: '🎯', label: '10 AI Plans Completed' },
+  { id: 'practices_100', emoji: '💪', label: '100 Practice Sessions' },
 ];
-
-// ── 日期工具 ──────────────────────────────────────────────────
-function todayStr(): string {
-  return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-}
-function daysBetween(a: string, b: string): number {
-  const da = new Date(a).getTime();
-  const db = new Date(b).getTime();
-  return Math.round(Math.abs(da - db) / 86400000);
-}
 
 // ── 获取用户统计 ──────────────────────────────────────────────
 export async function getUserStats(userId: string): Promise<UserStats | null> {
@@ -70,120 +38,9 @@ export async function getUserStats(userId: string): Promise<UserStats | null> {
   } as UserStats;
 }
 
-// ── 核心：更新连续打卡 ────────────────────────────────────────
-export async function updateStreak(userId: string): Promise<{
-  stats: UserStats;
-  newBadges: Badge[];
-}> {
-  const today = todayStr();
-
-  // 读取当前统计（先 upsert 确保行存在）
-  await supabase.from('user_stats').upsert(
-    { user_id: userId },
-    { onConflict: 'user_id', ignoreDuplicates: true }
-  );
-
-  const { data: raw } = await supabase
-    .from('user_stats')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
-
-  const current: UserStats = raw
-    ? { ...raw, badges: (raw.badges ?? []) as Badge[] }
-    : {
-        user_id: userId,
-        current_streak: 0,
-        longest_streak: 0,
-        total_practices: 0,
-        last_practice_date: null,
-        ai_plans_completed: 0,
-        badges: [],
-        updated_at: new Date().toISOString(),
-      };
-
-  // 计算新 streak
-  let newStreak = 1;
-  if (current.last_practice_date) {
-    const diff = daysBetween(current.last_practice_date, today);
-    if (diff === 0) {
-      // 今天已经打卡过，不重复计算
-      return { stats: current, newBadges: [] };
-    } else if (diff === 1) {
-      // 昨天打过 → 连续
-      newStreak = current.current_streak + 1;
-    } else {
-      // 断了 → 重置
-      newStreak = 1;
-    }
-  }
-
-  const newLongest = Math.max(newStreak, current.longest_streak);
-  const newTotal   = current.total_practices + 1;
-
-  // 更新后的 stats（用于勋章判断）
-  const updated: UserStats = {
-    ...current,
-    current_streak:    newStreak,
-    longest_streak:    newLongest,
-    total_practices:   newTotal,
-    last_practice_date: today,
-    updated_at:        new Date().toISOString(),
-  };
-
-  // 判断新解锁的勋章
-  const existingIds = new Set(current.badges.map(b => b.id));
-  const newBadges: Badge[] = [];
-
-  for (const def of BADGE_DEFS) {
-    if (!existingIds.has(def.id) && def.check(updated)) {
-      const badge: Badge = {
-        id: def.id,
-        emoji: def.emoji,
-        label: def.label,
-        earned_at: new Date().toISOString(),
-      };
-      newBadges.push(badge);
-    }
-  }
-
-  const allBadges: Badge[] = [...current.badges, ...newBadges];
-  updated.badges = allBadges;
-
-  // 写回数据库
-  await supabase.from('user_stats').upsert({
-    user_id:            userId,
-    current_streak:     newStreak,
-    longest_streak:     newLongest,
-    total_practices:    newTotal,
-    last_practice_date: today,
-    badges:             allBadges,
-    updated_at:         new Date().toISOString(),
-  }, { onConflict: 'user_id' });
-
-  return { stats: updated, newBadges };
-}
-
-// ── 标记完成 AI 练习计划 ──────────────────────────────────────
-export async function incrementAIPlansCompleted(userId: string): Promise<void> {
-  const stats = await getUserStats(userId);
-  if (!stats) return;
-
-  const newCount = stats.ai_plans_completed + 1;
-  const updated: UserStats = { ...stats, ai_plans_completed: newCount };
-
-  // 检查是否解锁勋章
-  const existingIds = new Set(stats.badges.map(b => b.id));
-  const newBadges: Badge[] = [];
-  for (const def of BADGE_DEFS) {
-    if (!existingIds.has(def.id) && def.check(updated)) {
-      newBadges.push({ id: def.id, emoji: def.emoji, label: def.label, earned_at: new Date().toISOString() });
-    }
-  }
-
-  await supabase.from('user_stats').update({
-    ai_plans_completed: newCount,
-    badges: [...stats.badges, ...newBadges],
-    updated_at: new Date().toISOString(),
-  }).eq('user_id', userId);
+/** 打卡前后相比,新出现的勋章(按 id 对比)。 */
+export function diffNewBadges(before: UserStats | null, after: UserStats | null): Badge[] {
+  if (!after) return [];
+  const had = new Set((before?.badges ?? []).map(b => b.id));
+  return (after.badges ?? []).filter(b => !had.has(b.id));
 }

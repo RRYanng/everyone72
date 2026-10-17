@@ -20,3 +20,4 @@ insert into public.rounds (id,user_id,course_id,total_strokes,total_putts,score_
  ('55555555-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','c1',90,36,18,E'Solid round.\n\n⚠️ AI Coach (web preview mode) — Install on your phone for full Claude-powered analysis.'),
  ('55555555-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000001','c1',85,33,13,'Your putting cost you 4 strokes today.')
 on conflict do nothing;
+

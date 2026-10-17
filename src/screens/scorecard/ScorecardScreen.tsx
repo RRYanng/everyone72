@@ -260,7 +260,9 @@ export default function ScorecardScreen() {
         throw new Error(
           saveErr?.message === 'invalid_holes'
             ? 'Some hole scores look invalid. Please check them and try again.'
-            : 'Could not save your round. Your scores are kept — please try again.',
+            : saveErr?.message === 'unknown_course'
+              ? 'This course is not in our verified list. Please pick it again from the course list.'
+              : 'Could not save your round. Your scores are kept — please try again.',
         );
       }
       await clearDraft();

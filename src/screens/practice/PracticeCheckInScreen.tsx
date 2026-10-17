@@ -19,7 +19,9 @@ import { supabase } from '../../lib/supabase';
 import { track } from '../../lib/analytics';
 import { useAuth } from '../../hooks/useAuth';
 import { showToast } from '../../components/Toast';
-import { updateStreak, BADGE_DEFS } from '../../lib/streak';
+import { getUserStats, diffNewBadges } from '../../lib/streak';
+import { PHOTO_BUCKET, validatePhoto, photoContentType } from '../../lib/photos';
+import { localDateString } from '../../lib/date';
 import { Alert as RNAlert } from 'react-native';
 import { RootStackParamList } from '../../navigation';
 
@@ -113,30 +115,28 @@ export default function PracticeCheckInScreen() {
   };
 
   // ── 上传图片到 Supabase Storage ────────────────────────────
+  // bucket 是私有的:返回的是存储路径(<uid>/<时间戳>.jpg),显示时再向 Storage 要签名 URL。
+  // 大小(≤5MB)和类型(图片)在这里先检查;服务端 bucket 也会强制。
   const uploadPhoto = async (userId: string): Promise<string | null> => {
     if (!photoUri) return null;
 
     const filename = `${userId}/${Date.now()}.jpg`;
-
+    let body: Blob | File;
     if (Platform.OS === 'web' && photoFile) {
-      // Web：直接上传 File 对象
-      const { data, error } = await supabase.storage
-        .from('practice-photos')
-        .upload(filename, photoFile, { contentType: photoFile.type, upsert: false });
-      if (error) throw new Error('Photo upload failed: ' + error.message);
-      const { data: urlData } = supabase.storage.from('practice-photos').getPublicUrl(filename);
-      return urlData.publicUrl;
+      body = photoFile;                                  // Web:直接上传 File 对象
     } else {
-      // 原生：fetch blob 后上传
-      const response = await fetch(photoUri);
-      const blob = await response.blob();
-      const { data, error } = await supabase.storage
-        .from('practice-photos')
-        .upload(filename, blob, { contentType: 'image/jpeg', upsert: false });
-      if (error) throw new Error('Photo upload failed: ' + error.message);
-      const { data: urlData } = supabase.storage.from('practice-photos').getPublicUrl(filename);
-      return urlData.publicUrl;
+      const response = await fetch(photoUri);            // 原生:fetch 成 blob 再上传
+      body = await response.blob();
     }
+
+    const problem = validatePhoto({ size: body.size, type: body.type });
+    if (problem) throw new Error(problem);
+
+    const { error } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .upload(filename, body, { contentType: photoContentType(body.type), upsert: false });
+    if (error) throw new Error('Photo upload failed: ' + error.message);
+    return filename;
   };
 
   // ── 提交打卡 ───────────────────────────────────────────────
@@ -160,8 +160,13 @@ export default function PracticeCheckInScreen() {
           photo_url = await uploadPhoto(currentUser.id);
         } catch (uploadErr: any) {
           console.warn('[CheckIn] Photo upload failed, continuing without photo:', uploadErr.message);
+          // 照片被拒(太大 / 类型不对)时告诉用户,而不是悄悄丢掉
+          showToast(`${uploadErr.message} Your check-in will be saved without the photo.`, 'info');
         }
       }
+
+      // 打卡前的统计:连续天数和勋章由服务端触发器更新,这里只用来对比出"新解锁"的勋章
+      const statsBefore = await getUserStats(currentUser.id);
 
       // 2. 插入 practice_logs（不用 .select() 避免 FK 联查问题）
       console.log('[CheckIn] Inserting for user:', currentUser.id, 'tags:', selectedTags);
@@ -176,6 +181,7 @@ export default function PracticeCheckInScreen() {
           note:             note.trim() || null,
           location:         location.trim() || null,
           following_plan:   followingPlan,
+          local_date:       localDateString(),   // 服务端会夹到 UTC 日期 ±1 天内
         });
 
       if (insertErr) {
@@ -189,7 +195,7 @@ export default function PracticeCheckInScreen() {
       navigation.goBack();
       // 更新连续打卡 streak + 勋章
       try {
-        const { newBadges } = await updateStreak(currentUser.id);
+        const newBadges = diffNewBadges(statsBefore, await getUserStats(currentUser.id));
         if (newBadges.length > 0) {
           const badge = newBadges[0];
           showToast(`🎉 New Badge: ${badge.emoji} ${badge.label}!`, 'success');

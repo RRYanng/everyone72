@@ -33,15 +33,19 @@ export default function CoachWaitlistModal({ visible, onClose }: Props) {
     setError('');
     setLoading(true);
 
-    const { error: dbError } = await supabase
-      .from('coach_waitlist')
-      .insert({ email: trimmed, user_id: user?.id ?? null });
+    // 不再直接写表:服务端函数会校验邮箱、限频(每人每天最多 3 个新邮箱),已在名单里的当作成功
+    const { error: dbError } = await supabase.rpc('join_coach_waitlist', { p_email: trimmed });
 
     setLoading(false);
 
-    if (dbError && dbError.code !== '23505') {
-      // 23505 = unique_violation (already joined) — treat as success
-      setError('Something went wrong. Please try again.');
+    if (dbError) {
+      setError(
+        dbError.message === 'too_many_requests'
+          ? 'Too many requests today. Please try again tomorrow.'
+          : dbError.message === 'invalid_email'
+            ? 'Please enter a valid email address.'
+            : 'Something went wrong. Please try again.',
+      );
       return;
     }
 

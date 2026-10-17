@@ -18,6 +18,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { getUserStats } from '../../lib/streak';
 import { isDevMockActive, MOCK_PRACTICE_LOGS } from '../../lib/mockUser';
 import { LoadingSpinner } from '../../components';
+import PracticePhoto from '../../components/PracticePhoto';
 import { UserStats } from '../../types';
 import { RootStackParamList } from '../../navigation';
 import { colors, radius, spacing, typography, fontFamily } from '../../theme';
@@ -128,10 +129,9 @@ function PracticeCard({
 
       {/* Photo */}
       {item.photo_url ? (
-        <Image
-          source={{ uri: item.photo_url }}
+        <PracticePhoto
+          value={item.photo_url}
           style={styles.photo}
-          resizeMode="cover"
           accessibilityLabel="Practice session photo"
         />
       ) : null}
